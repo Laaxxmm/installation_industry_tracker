@@ -340,7 +340,7 @@ export function PunchWidget({ openEntry, projects }: Props) {
   return (
     <div className="space-y-4 px-4">
       <div className="rounded-[14px] border border-sab-rule bg-sab-card p-5">
-        <div className="sab-eyebrow">Today's assignment</div>
+        <div className="sab-eyebrow">Today&apos;s assignment</div>
 
         {projects.length === 0 ? (
           <p className="mt-3 text-[13px] text-sab-ink-3">
@@ -371,7 +371,7 @@ export function PunchWidget({ openEntry, projects }: Props) {
 
             <div className="mt-[14px] flex items-center gap-2 rounded-md bg-sab-paper-alt px-3 py-[10px] font-sab-mono text-[11px] text-sab-ink-2">
               <Icon name="mapPin" size={12} className="text-sab-accent" />
-              <span>GPS captured on tap — denial won't block the clock.</span>
+              <span>GPS captured on tap — denial won&apos;t block the clock.</span>
             </div>
 
             <button

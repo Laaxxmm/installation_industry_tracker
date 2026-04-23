@@ -126,8 +126,8 @@ export function TransferForm({
           {pending ? "Saving…" : "Record transfer"}
         </Button>
         <p className="mt-2 text-xs text-muted-foreground">
-          Transfers out reduce this project's material cost and add to the destination project
-          at the material's current moving-average unit cost.
+          Transfers out reduce this project&apos;s material cost and add to the destination project
+          at the material&apos;s current moving-average unit cost.
         </p>
       </div>
     </form>
