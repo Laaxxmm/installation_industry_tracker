@@ -58,12 +58,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
 
-# Entrypoint: migrate -> (optional) seed -> start
+# Entrypoint: migrate -> (optional) seed -> start.
+# `sed` strip is defensive: if the file ever gets checked out with CRLF on
+# someone's Windows machine the script becomes silently unrunnable inside
+# alpine. .gitattributes pins LF in the repo but belt-and-braces here.
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
+RUN sed -i 's/\r$//' docker-entrypoint.sh \
+ && chmod +x docker-entrypoint.sh \
+ && head -1 docker-entrypoint.sh
 
 USER nextjs
 EXPOSE 8080
 
 # tini reaps zombies and forwards signals (clean shutdown on Railway redeploys).
-ENTRYPOINT ["/sbin/tini", "--", "./docker-entrypoint.sh"]
+# Absolute path to the script so $PWD / WORKDIR can't surprise us.
+ENTRYPOINT ["/sbin/tini", "--", "/app/docker-entrypoint.sh"]
