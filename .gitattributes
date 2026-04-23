@@ -1,0 +1,7 @@
+# Force LF line endings on files that ship into Linux containers.
+# Without this, Git on Windows can convert these to CRLF on checkout,
+# which breaks `#!/bin/sh` parsing inside the Docker image.
+*.sh              text eol=lf
+docker-entrypoint.sh text eol=lf
+Dockerfile        text eol=lf
+.dockerignore     text eol=lf

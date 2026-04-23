@@ -27,6 +27,14 @@ export default async function MobileLayout({
         "flex min-h-screen flex-col font-sab-sans " +
         (isLive ? "bg-sab-ink text-white" : "bg-sab-paper text-sab-ink")
       }
+      // Inset the content below the Android system status bar. The
+      // native-side WindowCompat.setDecorFitsSystemWindows(true) in
+      // MainActivity.java isn't reliably pushing the WebView down in
+      // every build (Capacitor re-applies edge-to-edge late), so we
+      // guarantee the inset in CSS. max() provides a 28px floor for
+      // phones where the WebView reports env(safe-area-inset-top) = 0
+      // (non-notched Android is the common case).
+      style={{ paddingTop: "max(env(safe-area-inset-top), 28px)" }}
     >
       <MobileHeader
         userName={session.user.name ?? "Team"}

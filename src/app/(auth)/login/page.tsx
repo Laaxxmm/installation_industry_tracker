@@ -16,7 +16,14 @@ export default async function LoginPage({
   if (session?.user) redirect(sp.callbackUrl ?? "/");
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-sab-paper font-sab-sans">
+    <main
+      className="relative min-h-screen overflow-hidden bg-sab-paper font-sab-sans"
+      // Inset below the Android system status bar in the Capacitor shell.
+      // Same rationale as the mobile layout: the native inset isn't
+      // reliably applied, so we guarantee it in CSS. 28px floor covers
+      // non-notched Android where env(safe-area-inset-top) reports 0.
+      style={{ paddingTop: "max(env(safe-area-inset-top), 28px)" }}
+    >
       {/* Warm paper-grain wash — same vibe as the mobile header */}
       <div
         aria-hidden

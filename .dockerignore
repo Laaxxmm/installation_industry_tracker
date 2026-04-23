@@ -1,52 +1,61 @@
-# Heavy / irrelevant directories — keep image lean
+# SAB India Tracker — Docker build context exclusions for the Next.js image.
+# Anything not listed here is shipped to the Docker daemon, so be precise.
+
+# --- Local artifacts (rebuilt inside the container) ---
 node_modules
 .next
 .next-*
 dist
 dist-mobile
 out
-build
+
+# --- Mobile / native (web deploy doesn't need them) ---
 android
 ios
+capacitor.config.ts
+
+# --- Source control / editors / OS noise ---
 .git
 .github
+.gitignore
 .claude
 .vscode
 .idea
+.DS_Store
+Thumbs.db
+
+# --- Tests + coverage (not run inside the deploy image) ---
 coverage
 test-results
 playwright-report
-prisma
-public/uploads
-
-# Sources not needed in the static deploy
-src
-sab_handoff
-docs
-scripts
 tests
-
-# Lockfiles + configs not used by the static server
-package.json
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-tsconfig.json
-tsconfig.tsbuildinfo
-next.config.mjs
-next-env.d.ts
-postcss.config.mjs
-tailwind.config.ts
 playwright.config.ts
 vitest.config.ts
-capacitor.config.ts
 
-# Secrets / local
+# --- Static-HTML demo (separate deploy story; not part of Next.js app) ---
+server.py
+SAB India Tracker.html
+
+# --- Docs / handoff / scripts ---
+docs
+sab_handoff
+scripts
+HANDOVER.md
+DEPLOY.md
+
+# --- Secrets / local env (Railway provides them at runtime) ---
 .env
 .env.*
 .env.local
 
-# OS / editor
-.DS_Store
-Thumbs.db
+# --- Logs ---
 *.log
+npm-debug.log*
+yarn-debug.log*
+
+# --- TS / Next ambient files (regenerated during build) ---
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# --- Don't ship public/uploads (per-tenant runtime data) ---
+public/uploads
