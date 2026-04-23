@@ -35,6 +35,11 @@ const NAV: NavNode[] = [
   { kind: "item", key: "grn", label: "Goods receipts", icon: "truck", href: "/procurement/grns" },
   { kind: "item", key: "bills", label: "Vendor bills", icon: "invoice", href: "/procurement/vendor-bills" },
 
+  { kind: "sep", label: "After-sales" },
+  { kind: "item", key: "service", label: "Service dashboard", icon: "report", href: "/service" },
+  { kind: "item", key: "service-issues", label: "Service tickets", icon: "clock", href: "/service/issues" },
+  { kind: "item", key: "amcs", label: "AMC contracts", icon: "folder", href: "/amcs" },
+
   { kind: "sep", label: "Admin" },
   { kind: "item", key: "users", label: "Users & roles", icon: "user", href: "/admin/users" },
   { kind: "item", key: "rates", label: "Wage rates", icon: "pie", href: "/admin/rates" },

@@ -95,6 +95,9 @@ enum InvoiceKind {
   PROGRESS
   FINAL
   ADHOC
+  AMC_CONTRACT
+  AMC_INSTALLMENT
+  SERVICE_CALL
 }
 
 enum InvoiceStatus {
@@ -136,6 +139,12 @@ model User {
   vendorPosApproved  VendorPO[]           @relation("VendorPOApprovedBy")
   grnsReceived       GRN[]                @relation("GRNReceivedBy")
   vendorBillsMatched VendorBill[]         @relation("VendorBillMatchedBy")
+  amcsApproved       AMC[]                @relation("AMCApprovedBy")
+  amcVisitsAssigned  AMCVisit[]           @relation("AMCVisitAssignee")
+  serviceIssuesAssigned ServiceIssue[]    @relation("ServiceIssueAssignee")
+  serviceIssuesClosed   ServiceIssue[]    @relation("ServiceIssueClosedBy")
+  serviceIssuesTriaged  ServiceIssue[]    @relation("ServiceIssueTriagedBy")
+  serviceVisitsAssigned ServiceVisit[]    @relation("ServiceVisitAssignee")
 }
 
 model EmployeeRateCard {
@@ -173,6 +182,8 @@ model Client {
   projects       Project[]
   quotes         Quote[]
   clientInvoices ClientInvoice[]
+  amcs           AMC[]
+  serviceIssues  ServiceIssue[]
 
   @@unique([name, gstin])
   @@index([name])
@@ -223,6 +234,8 @@ model Project {
   milestones      ProjectMilestone[]
   clientInvoices  ClientInvoice[]
   vendorPos       VendorPO[]
+  amcs            AMC[]
+  serviceIssues   ServiceIssue[]
 
   @@index([status])
   @@index([siteSupervisorId])
@@ -369,6 +382,10 @@ model StockIssue {
   issuedBy        User     @relation(fields: [issuedById], references: [id])
   issuedAt        DateTime
   note            String?
+  amcVisitId      String?  @unique
+  amcVisit        AMCVisit?     @relation(fields: [amcVisitId], references: [id])
+  serviceVisitId  String?  @unique
+  serviceVisit    ServiceVisit? @relation(fields: [serviceVisitId], references: [id])
   createdAt       DateTime @default(now())
 
   @@index([projectId, issuedAt])
@@ -609,6 +626,10 @@ model ClientInvoice {
   createdById            String
   createdBy              User          @relation("ClientInvoiceCreatedBy", fields: [createdById], references: [id])
   shareToken             String        @unique
+  amcId                  String?
+  amc                    AMC?          @relation(fields: [amcId], references: [id])
+  serviceIssueId         String?       @unique
+  serviceIssue           ServiceIssue? @relation(fields: [serviceIssueId], references: [id])
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
@@ -617,6 +638,7 @@ model ClientInvoice {
   @@index([projectId, issuedAt])
   @@index([status])
   @@index([clientId])
+  @@index([amcId])
 }
 
 model ClientInvoiceLine {
@@ -908,6 +930,271 @@ model GRNNumberSequence {
 }
 
 model VendorBillNumberSequence {
+  year Int @id
+  next Int @default(1)
+}
+
+// ---------- After-sales (AMC contracts + Service issues) ----------
+// Covers two adjacent revenue streams: preventive maintenance under annual
+// contracts (AMC), and reactive service callouts raised between visits. Both
+// share a technician-visit primitive and a coverage decision (AMC/warranty/
+// goodwill/billable).
+
+enum AMCType {
+  COMPREHENSIVE
+  NON_COMPREHENSIVE
+  LABOUR_ONLY
+}
+
+enum AMCBillingMode {
+  ANNUAL
+  INSTALLMENTS
+  PER_VISIT
+}
+
+enum AMCStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  ON_HOLD
+  EXPIRED
+  CANCELLED
+  RENEWED
+}
+
+enum AMCFrequency {
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  YEARLY
+}
+
+enum AMCVisitStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+  CANCELLED
+}
+
+enum ServiceChannel {
+  PHONE
+  WHATSAPP
+  EMAIL
+  PORTAL
+  WALK_IN
+}
+
+// Priority default SLA: P1 = 4h, P2 = 24h, P3 = 72h, P4 = 7d. Per-AMC
+// overrides live in the AMCSLA child table.
+enum ServicePriority {
+  P1
+  P2
+  P3
+  P4
+}
+
+enum ServiceCategory {
+  LEAK
+  BURST
+  BLOCKAGE
+  PUMP_FAILURE
+  VALVE_FAILURE
+  SPRINKLER_HEAD
+  ELECTRICAL
+  GENERAL
+}
+
+enum ServiceStatus {
+  NEW
+  TRIAGED
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  RESOLVED
+  VERIFIED
+  CLOSED
+  CANCELLED
+}
+
+enum ServiceCoverage {
+  AMC
+  WARRANTY
+  GOODWILL
+  BILLABLE
+}
+
+model AMC {
+  id               String         @id @default(cuid())
+  contractNo       String         @unique // e.g. "AMC-25-26-1042"
+  title            String
+  clientId         String
+  client           Client         @relation(fields: [clientId], references: [id])
+  projectId        String
+  project          Project        @relation(fields: [projectId], references: [id])
+  type             AMCType        @default(COMPREHENSIVE)
+  billingMode      AMCBillingMode @default(ANNUAL)
+  status           AMCStatus      @default(DRAFT)
+  startDate        DateTime
+  endDate          DateTime
+  frequency        AMCFrequency   @default(QUARTERLY)
+  visitsPerYear    Int            @default(4)
+  annualValue      Decimal        @default(0) @db.Decimal(14, 2)
+  taxPct           Decimal        @default(18) @db.Decimal(5, 2)
+  grandTotal       Decimal        @default(0) @db.Decimal(14, 2)
+  approvedByUserId String?
+  approvedBy       User?          @relation("AMCApprovedBy", fields: [approvedByUserId], references: [id])
+  approvedAt       DateTime?
+  activatedAt      DateTime?
+  cancelledAt      DateTime?
+  parentAmcId      String?
+  parentAmc        AMC?           @relation("AMCRenewal", fields: [parentAmcId], references: [id])
+  renewals         AMC[]          @relation("AMCRenewal")
+  siteAddress      String
+  assetsCovered    Json // array of { name, qty?, notes? }
+  exclusions       String?
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  slas          AMCSLA[]
+  visits        AMCVisit[]
+  serviceIssues ServiceIssue[]
+  invoices      ClientInvoice[]
+
+  @@index([status])
+  @@index([clientId, startDate])
+  @@index([projectId])
+  @@index([endDate])
+}
+
+model AMCSLA {
+  id              String          @id @default(cuid())
+  amcId           String
+  amc             AMC             @relation(fields: [amcId], references: [id], onDelete: Cascade)
+  priority        ServicePriority
+  responseHours   Int
+  resolutionHours Int
+
+  @@unique([amcId, priority])
+}
+
+model AMCVisit {
+  id                 String         @id @default(cuid())
+  amcId              String
+  amc                AMC            @relation(fields: [amcId], references: [id], onDelete: Cascade)
+  visitNo            Int // 1-indexed within contract
+  scheduledDate      DateTime
+  status             AMCVisitStatus @default(SCHEDULED)
+  assignedToUserId   String?
+  assignedTo         User?          @relation("AMCVisitAssignee", fields: [assignedToUserId], references: [id])
+  startedAt          DateTime?
+  completedAt        DateTime?
+  checklist          Json? // array of { item, ok, note }
+  findings           String?
+  photoUrls          String[]       @default([])
+  geoLat             Decimal?       @db.Decimal(9, 6)
+  geoLng             Decimal?       @db.Decimal(9, 6)
+  partsUsed          Json? // array of { sku, description, qty, unit }
+  notes              String?
+  offlineClientOpId  String?        @unique
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  stockIssue StockIssue?
+
+  @@unique([amcId, visitNo])
+  @@index([scheduledDate, status])
+  @@index([assignedToUserId, status])
+}
+
+model ServiceIssue {
+  id                       String          @id @default(cuid())
+  ticketNo                 String          @unique // e.g. "SR-25-26-0231"
+  clientId                 String
+  client                   Client          @relation(fields: [clientId], references: [id])
+  projectId                String
+  project                  Project         @relation(fields: [projectId], references: [id])
+  amcId                    String?
+  amc                      AMC?            @relation(fields: [amcId], references: [id])
+  reportedAt               DateTime
+  reportedByName           String
+  reportedByPhone          String?
+  channel                  ServiceChannel  @default(PHONE)
+  siteAddress              String
+  summary                  String
+  description              String?
+  attachmentUrls           String[]        @default([])
+  category                 ServiceCategory @default(GENERAL)
+  priority                 ServicePriority @default(P3)
+  coverage                 ServiceCoverage @default(BILLABLE)
+  coverageOverrideReason   String?
+  responseDueAt            DateTime?
+  resolutionDueAt          DateTime?
+  firstResponseAt          DateTime?
+  resolvedAt               DateTime?
+  slaBreachedAt            DateTime?
+  onHoldSince              DateTime?
+  onHoldCumulativeMinutes  Int             @default(0)
+  status                   ServiceStatus   @default(NEW)
+  assignedToUserId         String?
+  assignedTo               User?           @relation("ServiceIssueAssignee", fields: [assignedToUserId], references: [id])
+  triagedByUserId          String?
+  triagedBy                User?           @relation("ServiceIssueTriagedBy", fields: [triagedByUserId], references: [id])
+  triagedAt                DateTime?
+  closedAt                 DateTime?
+  closedByUserId           String?
+  closedBy                 User?           @relation("ServiceIssueClosedBy", fields: [closedByUserId], references: [id])
+  closureNotes             String?
+  clientSignoffName        String?
+  clientSignoffAt          DateTime?
+  billableAmount           Decimal?        @db.Decimal(14, 2)
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+
+  visits  ServiceVisit[]
+  invoice ClientInvoice?
+
+  @@index([status, priority])
+  @@index([clientId, reportedAt])
+  @@index([projectId])
+  @@index([assignedToUserId, status])
+  @@index([resolutionDueAt])
+  @@index([slaBreachedAt])
+}
+
+model ServiceVisit {
+  id                String       @id @default(cuid())
+  serviceIssueId    String
+  serviceIssue      ServiceIssue @relation(fields: [serviceIssueId], references: [id], onDelete: Cascade)
+  assignedToUserId  String?
+  assignedTo        User?        @relation("ServiceVisitAssignee", fields: [assignedToUserId], references: [id])
+  scheduledAt       DateTime?
+  arrivedAt         DateTime?
+  completedAt       DateTime?
+  findings          String?
+  workPerformed     String?
+  partsUsed         Json? // array of { sku, description, qty, unit }
+  photoUrls         String[]     @default([])
+  geoLat            Decimal?     @db.Decimal(9, 6)
+  geoLng            Decimal?     @db.Decimal(9, 6)
+  signatureUrl      String?
+  offlineClientOpId String?      @unique
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  stockIssue StockIssue?
+
+  @@index([serviceIssueId])
+  @@index([assignedToUserId, scheduledAt])
+}
+
+model AMCNumberSequence {
+  year Int @id
+  next Int @default(1)
+}
+
+model ServiceTicketNumberSequence {
   year Int @id
   next Int @default(1)
 }

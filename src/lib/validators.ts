@@ -364,3 +364,141 @@ export const VendorBillCreateInput = z.object({
   lines: z.array(VendorBillLineInput).min(1, "At least one line is required"),
 });
 export type VendorBillCreateInput = z.infer<typeof VendorBillCreateInput>;
+
+// ---------- After-sales (AMC + Service Issues) ----------
+
+const AMC_TYPE = z.enum(["COMPREHENSIVE", "NON_COMPREHENSIVE", "LABOUR_ONLY"]);
+const AMC_BILLING_MODE = z.enum(["ANNUAL", "INSTALLMENTS", "PER_VISIT"]);
+const AMC_FREQUENCY = z.enum(["MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"]);
+const SERVICE_PRIORITY = z.enum(["P1", "P2", "P3", "P4"]);
+const SERVICE_CHANNEL = z.enum(["PHONE", "WHATSAPP", "EMAIL", "PORTAL", "WALK_IN"]);
+const SERVICE_CATEGORY = z.enum([
+  "LEAK",
+  "BURST",
+  "BLOCKAGE",
+  "PUMP_FAILURE",
+  "VALVE_FAILURE",
+  "SPRINKLER_HEAD",
+  "ELECTRICAL",
+  "GENERAL",
+]);
+const SERVICE_COVERAGE = z.enum(["AMC", "WARRANTY", "GOODWILL", "BILLABLE"]);
+
+export const AMCSLAInput = z.object({
+  priority: SERVICE_PRIORITY,
+  responseHours: z.number().int().min(1).max(24 * 30),
+  resolutionHours: z.number().int().min(1).max(24 * 60),
+});
+export type AMCSLAInput = z.infer<typeof AMCSLAInput>;
+
+const ASSET_LINE = z.object({
+  name: z.string().min(1).max(200),
+  qty: z.number().int().min(1).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const AMCInput = z
+  .object({
+    title: z.string().min(1).max(200),
+    clientId: z.string(),
+    projectId: z.string(),
+    type: AMC_TYPE.default("COMPREHENSIVE"),
+    billingMode: AMC_BILLING_MODE.default("ANNUAL"),
+    startDate: z.string().datetime(),
+    endDate: z.string().datetime(),
+    frequency: AMC_FREQUENCY.default("QUARTERLY"),
+    visitsPerYear: z.number().int().min(1).max(52),
+    annualValue: decimalString,
+    taxPct: decimalString.default("18"),
+    siteAddress: z.string().min(1).max(500),
+    assetsCovered: z.array(ASSET_LINE).min(1, "List at least one covered asset"),
+    exclusions: z.string().max(2000).optional(),
+    notes: z.string().max(2000).optional(),
+    slas: z.array(AMCSLAInput).min(1, "Define SLA for at least one priority"),
+  })
+  .refine(
+    (v) => new Date(v.endDate).getTime() > new Date(v.startDate).getTime(),
+    { message: "End date must be after start date", path: ["endDate"] },
+  )
+  .refine(
+    (v) => {
+      const perYear = { MONTHLY: 12, QUARTERLY: 4, HALF_YEARLY: 2, YEARLY: 1 }[v.frequency];
+      return v.visitsPerYear === perYear;
+    },
+    { message: "visitsPerYear must match frequency (QUARTERLY→4, etc.)", path: ["visitsPerYear"] },
+  );
+export type AMCInput = z.infer<typeof AMCInput>;
+
+const PART_LINE = z.object({
+  sku: z.string().max(60).optional(),
+  description: z.string().min(1).max(200),
+  qty: decimalString,
+  unit: z.string().min(1).max(20),
+});
+
+const CHECKLIST_ITEM = z.object({
+  item: z.string().min(1).max(200),
+  ok: z.boolean(),
+  note: z.string().max(500).optional(),
+});
+
+export const AMCVisitCompleteInput = z.object({
+  findings: z.string().max(4000).optional(),
+  partsUsed: z.array(PART_LINE).optional(),
+  photoUrls: z.array(z.string().url()).default([]),
+  geoLat: z.number().min(-90).max(90).optional(),
+  geoLng: z.number().min(-180).max(180).optional(),
+  checklist: z.array(CHECKLIST_ITEM).optional(),
+  notes: z.string().max(2000).optional(),
+  billableAmount: decimalString.optional(),
+  offlineClientOpId: z.string().uuid().optional(),
+});
+export type AMCVisitCompleteInput = z.infer<typeof AMCVisitCompleteInput>;
+
+export const ServiceIssueCreateInput = z.object({
+  clientId: z.string(),
+  projectId: z.string(),
+  amcId: z.string().nullable().optional(),
+  reportedAt: z.string().datetime(),
+  reportedByName: z.string().min(1).max(120),
+  reportedByPhone: z.string().max(30).optional(),
+  channel: SERVICE_CHANNEL,
+  siteAddress: z.string().min(1).max(500),
+  summary: z.string().min(5).max(200),
+  description: z.string().max(4000).optional(),
+  attachmentUrls: z.array(z.string().url()).default([]),
+  category: SERVICE_CATEGORY.default("GENERAL"),
+  priority: SERVICE_PRIORITY.default("P3"),
+});
+export type ServiceIssueCreateInput = z.infer<typeof ServiceIssueCreateInput>;
+
+export const ServiceIssueTriageInput = z.object({
+  category: SERVICE_CATEGORY,
+  priority: SERVICE_PRIORITY,
+  coverage: SERVICE_COVERAGE,
+  coverageOverrideReason: z.string().max(500).optional(),
+  assignedToUserId: z.string().nullable().optional(),
+  scheduledAt: z.string().datetime().nullable().optional(),
+});
+export type ServiceIssueTriageInput = z.infer<typeof ServiceIssueTriageInput>;
+
+export const ServiceVisitLogInput = z.object({
+  arrivedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional(),
+  findings: z.string().max(4000).optional(),
+  workPerformed: z.string().max(4000).optional(),
+  partsUsed: z.array(PART_LINE).optional(),
+  photoUrls: z.array(z.string().url()).default([]),
+  geoLat: z.number().min(-90).max(90).optional(),
+  geoLng: z.number().min(-180).max(180).optional(),
+  signatureUrl: z.string().url().optional(),
+  offlineClientOpId: z.string().uuid().optional(),
+});
+export type ServiceVisitLogInput = z.infer<typeof ServiceVisitLogInput>;
+
+export const ServiceIssueCloseInput = z.object({
+  clientSignoffName: z.string().min(1).max(120),
+  closureNotes: z.string().max(2000).optional(),
+  billableAmount: decimalString.optional(),
+});
+export type ServiceIssueCloseInput = z.infer<typeof ServiceIssueCloseInput>;

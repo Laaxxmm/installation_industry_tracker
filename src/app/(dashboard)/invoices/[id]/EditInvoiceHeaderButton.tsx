@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { InvoiceKind } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,7 @@ import { updateInvoiceHeader } from "@/server/actions/client-invoices";
 
 type InitialHeader = {
   invoiceId: string;
-  kind: "ADVANCE" | "PROGRESS" | "FINAL" | "ADHOC";
+  kind: InvoiceKind;
   placeOfSupplyStateCode: string;
   dueAt: string | null;
   poRef: string | null;

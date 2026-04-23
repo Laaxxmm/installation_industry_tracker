@@ -3,6 +3,7 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import {
+  InvoiceKind,
   InvoiceStatus,
   Prisma,
   Role,
@@ -236,7 +237,7 @@ export async function updateInvoiceHeader(raw: {
   poRef?: string | null;
   notes?: string | null;
   termsMd?: string | null;
-  kind?: "ADVANCE" | "PROGRESS" | "FINAL" | "ADHOC";
+  kind?: InvoiceKind;
 }) {
   const session = await requireRole([Role.ADMIN, Role.MANAGER]);
   const invoice = await db.clientInvoice.findUnique({
