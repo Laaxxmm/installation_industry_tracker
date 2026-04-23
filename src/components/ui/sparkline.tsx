@@ -11,11 +11,11 @@ export interface SparklineProps {
 
 /**
  * Minimal SVG sparkline — stroke + light fill underneath.
- * Deterministic, no tooltips. Use for KPI trend hints.
+ * Default color tracks the SAB signal-orange accent token.
  */
 export function Sparkline({
   data,
-  color = "#0B5CAD",
+  color = "var(--sab-accent, #d17a3b)",
   width = 80,
   height = 28,
   strokeWidth = 1.5,
@@ -37,7 +37,7 @@ export function Sparkline({
     <svg width={width} height={height} className={className}>
       <polyline
         fill={color}
-        fillOpacity="0.08"
+        fillOpacity="0.1"
         stroke="none"
         points={`0,${height} ${points} ${width},${height}`}
       />

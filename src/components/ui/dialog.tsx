@@ -39,14 +39,14 @@ export function Dialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-4 py-10 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[hsl(var(--foreground))]/30 px-4 py-10 backdrop-blur-sm"
       onClick={() => onOpenChange(false)}
     >
       <div
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl",
+          "relative w-full max-w-md rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-xl",
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -54,7 +54,7 @@ export function Dialog({
         <button
           type="button"
           onClick={() => onOpenChange(false)}
-          className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--secondary))] hover:text-[hsl(var(--foreground))]"
           aria-label="Close"
         >
           <X className="h-4 w-4" />
@@ -62,12 +62,14 @@ export function Dialog({
         {(title || description) && (
           <div className="mb-4 pr-8">
             {title && (
-              <h2 className="text-[15px] font-semibold text-slate-900">
+              <h2 className="text-[15px] font-semibold text-[hsl(var(--foreground))]">
                 {title}
               </h2>
             )}
             {description && (
-              <p className="mt-0.5 text-[12px] text-slate-500">{description}</p>
+              <p className="mt-0.5 text-[12px] text-[hsl(var(--muted-foreground))]">
+                {description}
+              </p>
             )}
           </div>
         )}

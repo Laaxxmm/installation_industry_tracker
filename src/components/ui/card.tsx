@@ -1,12 +1,15 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+// Warm-paper editorial card. Border + surface come from token vars so every
+// route inherits the SAB palette automatically.
+
 export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
-        "rounded-md border border-slate-200 bg-card text-card-foreground shadow-card",
+        "rounded border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))]",
         className,
       )}
       {...props}
@@ -20,7 +23,7 @@ export const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<
     <div
       ref={ref}
       className={cn(
-        "flex flex-col space-y-1 border-b border-slate-200 px-5 py-3.5",
+        "flex flex-col space-y-1 border-b border-[hsl(var(--border))] px-5 py-3.5",
         className,
       )}
       {...props}
@@ -33,7 +36,10 @@ export const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<H
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("text-[14px] font-semibold leading-tight text-slate-900", className)}
+      className={cn(
+        "text-[14px] font-semibold leading-tight tracking-tight text-[hsl(var(--foreground))]",
+        className,
+      )}
       {...props}
     />
   ),
@@ -44,7 +50,11 @@ export const CardDescription = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("text-[12px] text-slate-500", className)} {...props} />
+  <div
+    ref={ref}
+    className={cn("text-[12px] text-[hsl(var(--muted-foreground))]", className)}
+    {...props}
+  />
 ));
 CardDescription.displayName = "CardDescription";
 
@@ -59,7 +69,10 @@ export const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("flex items-center border-t border-slate-200 px-5 py-3", className)}
+      className={cn(
+        "flex items-center border-t border-[hsl(var(--border))] px-5 py-3",
+        className,
+      )}
       {...props}
     />
   ),

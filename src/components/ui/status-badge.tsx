@@ -13,20 +13,33 @@ type Status =
   | "OPEN"
   | "SUBMITTED"
   | "APPROVED"
-  | "REJECTED";
+  | "REJECTED"
+  | "PENDING"
+  | "PAID"
+  | "RECEIVED"
+  | "CLOSED";
 
+// SAB editorial status dot. Colors resolve through the SAB oklch tokens defined
+// in globals.css (--sab-positive / --sab-amber / --sab-alert / --sab-blue /
+// --sab-ink3 / --sab-accent), so dots and foreground stay on the warm-paper
+// palette without touching each caller.
 const MAP: Record<string, { dot: string; fg: string; label: string }> = {
   // Project
-  DRAFT: { dot: "#64748B", fg: "text-slate-600", label: "Draft" },
-  ACTIVE: { dot: "#059669", fg: "text-emerald-700", label: "Active" },
-  ON_HOLD: { dot: "#D97706", fg: "text-amber-700", label: "On hold" },
-  COMPLETED: { dot: "#0B5CAD", fg: "text-brand", label: "Completed" },
-  CANCELLED: { dot: "#DC2626", fg: "text-red-700", label: "Cancelled" },
-  // Time entry
-  OPEN: { dot: "#0EA5E9", fg: "text-sky-700", label: "Open" },
-  SUBMITTED: { dot: "#D97706", fg: "text-amber-700", label: "Submitted" },
-  APPROVED: { dot: "#059669", fg: "text-emerald-700", label: "Approved" },
-  REJECTED: { dot: "#DC2626", fg: "text-red-700", label: "Rejected" },
+  DRAFT: { dot: "var(--sab-ink3)", fg: "text-[color:var(--sab-ink3)]", label: "Draft" },
+  ACTIVE: { dot: "var(--sab-positive)", fg: "text-[color:var(--sab-positive)]", label: "Active" },
+  ON_HOLD: { dot: "var(--sab-amber)", fg: "text-[color:var(--sab-amber)]", label: "On hold" },
+  COMPLETED: { dot: "var(--sab-accent)", fg: "text-[color:var(--sab-accent-ink)]", label: "Completed" },
+  CANCELLED: { dot: "var(--sab-alert)", fg: "text-[color:var(--sab-alert)]", label: "Cancelled" },
+  CLOSED: { dot: "var(--sab-ink3)", fg: "text-[color:var(--sab-ink3)]", label: "Closed" },
+  // Time entry / approval
+  OPEN: { dot: "var(--sab-blue)", fg: "text-[color:var(--sab-blue)]", label: "Open" },
+  SUBMITTED: { dot: "var(--sab-amber)", fg: "text-[color:var(--sab-amber)]", label: "Submitted" },
+  APPROVED: { dot: "var(--sab-positive)", fg: "text-[color:var(--sab-positive)]", label: "Approved" },
+  REJECTED: { dot: "var(--sab-alert)", fg: "text-[color:var(--sab-alert)]", label: "Rejected" },
+  // Invoice / payment / receipt
+  PENDING: { dot: "var(--sab-amber)", fg: "text-[color:var(--sab-amber)]", label: "Pending" },
+  PAID: { dot: "var(--sab-positive)", fg: "text-[color:var(--sab-positive)]", label: "Paid" },
+  RECEIVED: { dot: "var(--sab-positive)", fg: "text-[color:var(--sab-positive)]", label: "Received" },
 };
 
 export function StatusBadge({
@@ -36,7 +49,13 @@ export function StatusBadge({
   status: Status | string;
   className?: string;
 }) {
-  const s = MAP[status] ?? { dot: "#64748B", fg: "text-slate-600", label: status };
+  const s =
+    MAP[status] ??
+    {
+      dot: "var(--sab-ink3)",
+      fg: "text-[color:var(--sab-ink3)]",
+      label: status,
+    };
   return (
     <span
       className={cn(
@@ -45,10 +64,7 @@ export function StatusBadge({
         className,
       )}
     >
-      <span
-        className="h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: s.dot }}
-      />
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: s.dot }} />
       {s.label}
     </span>
   );

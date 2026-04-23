@@ -87,16 +87,16 @@ export function Combobox({
           setOpen((o) => !o);
           setTimeout(() => inputRef.current?.focus(), 0);
         }}
-        className="flex h-9 w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-1.5 text-left text-[13px] text-slate-900 shadow-sm transition focus-visible:border-brand focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex h-9 w-full items-center justify-between rounded border border-[hsl(var(--border))] bg-white px-3 py-1.5 text-left text-[13px] text-[hsl(var(--foreground))] transition focus-visible:border-[hsl(var(--ring))] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[hsl(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <span className={cn("truncate", !selected && "text-slate-400")}>
+        <span className={cn("truncate", !selected && "text-[hsl(var(--muted-foreground))]")}>
           {selected?.label ?? placeholder}
         </span>
-        <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-slate-400" />
+        <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-[hsl(var(--muted-foreground))]" />
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
-          <div className="border-b border-slate-200 p-1.5">
+        <div className="absolute z-20 mt-1 w-full rounded border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-lg">
+          <div className="border-b border-[hsl(var(--border))] p-1.5">
             <Input
               ref={inputRef}
               value={query}
@@ -108,7 +108,9 @@ export function Combobox({
           </div>
           <ul className="max-h-60 overflow-auto py-1">
             {filtered.length === 0 && (
-              <li className="px-3 py-2 text-[12px] text-slate-500">{emptyText}</li>
+              <li className="px-3 py-2 text-[12px] text-[hsl(var(--muted-foreground))]">
+                {emptyText}
+              </li>
             )}
             {filtered.map((o, idx) => {
               const isActive = idx === activeIdx;
@@ -123,14 +125,16 @@ export function Combobox({
                   }}
                   className={cn(
                     "flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[13px]",
-                    isActive ? "bg-slate-100" : "bg-white",
-                    isSelected ? "font-medium text-slate-900" : "text-slate-700",
+                    isActive ? "bg-[hsl(var(--secondary))]" : "bg-[hsl(var(--card))]",
+                    isSelected
+                      ? "font-medium text-[hsl(var(--foreground))]"
+                      : "text-[hsl(var(--foreground))]/80",
                   )}
                 >
                   <Check
                     className={cn(
                       "h-3.5 w-3.5 shrink-0",
-                      isSelected ? "text-brand" : "text-transparent",
+                      isSelected ? "text-[hsl(var(--primary))]" : "text-transparent",
                     )}
                   />
                   <span className="truncate">{o.label}</span>

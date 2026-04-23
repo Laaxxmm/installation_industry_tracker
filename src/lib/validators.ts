@@ -264,3 +264,103 @@ export const POUpdateInput = z.object({
   plannedEnd: z.string().datetime().optional(),
 });
 export type POUpdateInput = z.infer<typeof POUpdateInput>;
+
+// ---------- Procurement (Vendors, Vendor POs, GRNs, Vendor bills) ----------
+
+const VENDOR_CATEGORY = z.enum([
+  "PIPES",
+  "FITTINGS",
+  "PUMPS",
+  "VALVES",
+  "SPRINKLERS",
+  "TOOLS",
+  "CONSUMABLES",
+  "SERVICES",
+  "OTHER",
+]);
+
+const VENDOR_PAYMENT_TERMS = z.enum([
+  "NET_15",
+  "NET_30",
+  "NET_45",
+  "NET_60",
+  "ADVANCE",
+]);
+
+export const VendorInput = z.object({
+  name: z.string().min(1).max(200),
+  gstin: z.union([GSTIN, z.literal("")]).optional().transform((v) => (v ? v : undefined)),
+  pan: z
+    .union([z.string().regex(/^[A-Z]{5}\d{4}[A-Z]$/), z.literal("")])
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+  stateCode: STATE_CODE,
+  category: VENDOR_CATEGORY.default("OTHER"),
+  msme: z.boolean().default(false),
+  contactName: z.string().max(120).optional(),
+  phone: z.string().max(30).optional(),
+  email: z
+    .union([z.string().email(), z.literal("")])
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+  address: z.string().max(500).optional(),
+  paymentTerms: VENDOR_PAYMENT_TERMS.default("NET_30"),
+  creditLimit: decimalString.default("0"),
+  notes: z.string().max(1000).optional(),
+});
+export type VendorInput = z.infer<typeof VendorInput>;
+
+export const VendorPOLineInput = z.object({
+  sku: z.string().min(1).max(60),
+  description: z.string().min(1).max(300),
+  unit: z.string().min(1).max(20),
+  quantity: decimalString,
+  unitPrice: decimalString,
+  gstRatePct: decimalString.default("18"),
+});
+export type VendorPOLineInput = z.infer<typeof VendorPOLineInput>;
+
+export const VendorPOCreateInput = z.object({
+  vendorId: z.string(),
+  projectId: z.string().nullable().optional(),
+  expectedDate: z.string().datetime().nullable().optional(),
+  notes: z.string().max(2000).optional(),
+  lines: z.array(VendorPOLineInput).min(1, "At least one line is required"),
+});
+export type VendorPOCreateInput = z.infer<typeof VendorPOCreateInput>;
+
+export const GRNLineInput = z.object({
+  poLineId: z.string(),
+  acceptedQty: decimalString,
+  rejectedQty: decimalString.default("0"),
+  reason: z.string().max(500).optional(),
+});
+export type GRNLineInput = z.infer<typeof GRNLineInput>;
+
+export const GRNCreateInput = z.object({
+  poId: z.string(),
+  receivedAt: z.string().datetime(),
+  notes: z.string().max(1000).optional(),
+  lines: z.array(GRNLineInput).min(1, "At least one line is required"),
+});
+export type GRNCreateInput = z.infer<typeof GRNCreateInput>;
+
+export const VendorBillLineInput = z.object({
+  description: z.string().min(1).max(300),
+  unit: z.string().min(1).max(20),
+  quantity: decimalString,
+  unitPrice: decimalString,
+  gstRatePct: decimalString.default("18"),
+});
+export type VendorBillLineInput = z.infer<typeof VendorBillLineInput>;
+
+export const VendorBillCreateInput = z.object({
+  vendorId: z.string(),
+  poId: z.string().nullable().optional(),
+  vendorBillNo: z.string().max(80).optional(),
+  issueDate: z.string().datetime(),
+  dueDate: z.string().datetime().nullable().optional(),
+  notes: z.string().max(1000).optional(),
+  lines: z.array(VendorBillLineInput).min(1, "At least one line is required"),
+});
+export type VendorBillCreateInput = z.infer<typeof VendorBillCreateInput>;

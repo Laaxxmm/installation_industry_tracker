@@ -1,8 +1,13 @@
 // Rupee formatting with native lakh/crore grouping.
 // Mirrors the `inr()` helper in the Claude Design handoff system.jsx.
 
+// Accept anything `Number()` can handle: plain numbers, strings (e.g. "1234.56"),
+// and Prisma Decimals (which define toString()). This lets callers pass
+// `Decimal` values straight through without per-call coercion.
+type Numeric = number | string | { toString(): string };
+
 export function inr(
-  n: number | null | undefined,
+  n: Numeric | null | undefined,
   { compact = true, short = false }: { compact?: boolean; short?: boolean } = {},
 ): string {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
