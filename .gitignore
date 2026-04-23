@@ -47,6 +47,12 @@ prisma/*.db-journal
 # runtime uploads
 public/uploads/
 
+# local DB dumps (contain real data, never commit)
+backups/
+
+# Claude Design handoff — extracted locally only, not committed
+design-preview/
+
 # Capacitor / Android build artifacts (gradle output, not source)
 android/app/build/
 android/build/

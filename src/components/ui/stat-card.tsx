@@ -1,7 +1,5 @@
 import * as React from "react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Sparkline } from "./sparkline";
+import { KPI, Sparkline } from "@/components/sab";
 
 export interface StatCardProps {
   label: string;
@@ -15,67 +13,41 @@ export interface StatCardProps {
 }
 
 /**
- * Executive Sapphire KPI card.
+ * Editorial KPI card (ex-sapphire StatCard). Forwards to SAB <KPI/> so the
+ * entire dashboard inherits the warm-paper look without touching every page.
  *
- * - Uppercase eyebrow label (10px tracking-wider slate-500)
- * - Large value (24px, semibold, tabular-nums)
- * - Optional sparkline on the right
- * - Optional delta with arrow icon + "vs last period"-style subtitle
+ * - `delta` of the form "+12%" or "-3%" becomes the numeric trend prop on KPI.
+ * - `spark` draws a sparkline in the accent colour.
  */
 export function StatCard({
   label,
   value,
   delta,
-  deltaDirection = "flat",
+  deltaDirection,
   sub,
   spark,
   sparkColor,
-  className,
 }: StatCardProps) {
-  const up = deltaDirection === "up";
-  const down = deltaDirection === "down";
-  const color = up ? "#059669" : down ? "#DC2626" : "#64748B";
+  let trend: number | undefined;
+  if (delta) {
+    const m = delta.match(/-?\d+(?:\.\d+)?/);
+    if (m) {
+      const n = Number(m[0]);
+      trend = deltaDirection === "down" ? -Math.abs(n) : n;
+    }
+  }
+
   return (
-    <div
-      className={cn(
-        "rounded-md border border-slate-200 bg-white p-4 shadow-card",
-        className,
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            {label}
-          </div>
-          <div className="mt-2 truncate text-[22px] font-semibold tracking-tight text-slate-900 tabular-nums">
-            {value}
-          </div>
-        </div>
-        {spark && spark.length > 1 && (
-          <Sparkline data={spark} color={sparkColor ?? color} />
-        )}
-      </div>
-      {(delta || sub) && (
-        <div className="mt-3 flex items-center justify-between text-[11px]">
-          {delta ? (
-            <div
-              className={cn(
-                "flex items-center gap-1 font-semibold tabular-nums",
-                up && "text-emerald-700",
-                down && "text-red-700",
-                !up && !down && "text-slate-600",
-              )}
-            >
-              {up && <ArrowUpRight className="h-3 w-3" />}
-              {down && <ArrowDownRight className="h-3 w-3" />}
-              {delta}
-            </div>
-          ) : (
-            <span />
-          )}
-          {sub && <span className="text-slate-500">{sub}</span>}
-        </div>
-      )}
-    </div>
+    <KPI
+      label={label}
+      value={value}
+      sub={sub}
+      trend={trend}
+      spark={
+        spark && spark.length > 1 ? (
+          <Sparkline values={spark} width={120} height={24} color={sparkColor} />
+        ) : undefined
+      }
+    />
   );
 }

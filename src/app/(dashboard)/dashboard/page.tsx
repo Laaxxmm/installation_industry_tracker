@@ -1,24 +1,30 @@
 import Link from "next/link";
-import { ArrowUpRight, Download, Plus } from "lucide-react";
 import { Decimal } from "decimal.js";
 import { InvoiceStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { requireSession } from "@/server/rbac";
 import { getProjectPnl } from "@/server/actions/pnl";
-import { Button } from "@/components/ui/button";
-import { StatCard } from "@/components/ui/stat-card";
-import { PageHeader } from "@/components/ui/page-header";
 import { DashboardFyFilter } from "./DashboardFyFilter";
 import { DashboardDescriptionFilter } from "./DashboardDescriptionFilter";
-import { toDecimal, formatINRCompact, formatINR, zero } from "@/lib/money";
+import { toDecimal, zero } from "@/lib/money";
 import { istFyStart, istFyEnd, istFyLabel } from "@/lib/time";
+import {
+  Btn,
+  Icon,
+  KPI,
+  PageHeader,
+  SAB,
+  Sparkbars,
+  Sparkline,
+  inr,
+} from "@/components/sab";
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function monthLabel(d: Date) {
-  return d.toLocaleString("en-IN", { month: "short", year: "2-digit" });
+  return d.toLocaleString("en-IN", { month: "short" });
 }
 
 export default async function DashboardPage({
@@ -42,9 +48,7 @@ export default async function DashboardPage({
         to: istFyEnd(new Date(fyYear, 5, 1)),
       }
     : null;
-  const scopeLabel = fyYear
-    ? istFyLabel(new Date(fyYear, 5, 1))
-    : "All-time";
+  const scopeLabel = fyYear ? istFyLabel(new Date(fyYear, 5, 1)) : "All-time";
 
   const issuedAtFilter = scopeRange
     ? { issuedAt: { gte: scopeRange.from, lt: scopeRange.to } }
@@ -168,41 +172,35 @@ export default async function DashboardPage({
     .filter((d) => d.length > 0);
 
   const billedByProject = new Map<string, Decimal>(
-    billedByProjectAgg.map((b) => [
-      b.projectId,
-      toDecimal(b._sum.grandTotal ?? 0),
-    ]),
+    billedByProjectAgg.map((b) => [b.projectId, toDecimal(b._sum.grandTotal ?? 0)]),
   );
 
-  // Portfolio-wide stats (always all-time) for the panels that aren't scoped.
   let noPoDateCount = 0;
   let noResponseCount = 0;
   const clientSet = new Set<string>();
-  const clientTotals = new Map<string, Decimal>();
+  const clientTotals = new Map<string, { pov: Decimal; pos: number; billed: Decimal }>();
   for (const p of projects) {
     const po = toDecimal(p.contractValue);
+    const billed = billedByProject.get(p.id) ?? new Decimal(0);
     if (!p.poDate) noPoDateCount++;
     if (!p.response || !p.response.trim()) noResponseCount++;
     if (p.clientName) {
       clientSet.add(p.clientName);
-      clientTotals.set(
-        p.clientName,
-        (clientTotals.get(p.clientName) ?? new Decimal(0)).plus(po),
-      );
+      const cur = clientTotals.get(p.clientName) ?? { pov: new Decimal(0), pos: 0, billed: new Decimal(0) };
+      clientTotals.set(p.clientName, {
+        pov: cur.pov.plus(po),
+        pos: cur.pos + 1,
+        billed: cur.billed.plus(billed),
+      });
     }
   }
   const topClients = [...clientTotals.entries()]
-    .sort((a, b) => b[1].comparedTo(a[1]))
+    .sort((a, b) => b[1].pov.comparedTo(a[1].pov))
     .slice(0, 5);
 
-  // Scope-aware project slice: projects whose poDate falls in the selected
-  // FY (or all projects when no FY filter is active).
   const projectsInScope = scopeRange
     ? projects.filter(
-        (p) =>
-          p.poDate !== null &&
-          p.poDate >= scopeRange.from &&
-          p.poDate < scopeRange.to,
+        (p) => p.poDate !== null && p.poDate >= scopeRange.from && p.poDate < scopeRange.to,
       )
     : projects;
 
@@ -235,14 +233,10 @@ export default async function DashboardPage({
   const fyYears: number[] = [];
   for (let y = currentFyYear; y >= oldestFyYear; y--) fyYears.push(y);
 
-  const pnlRange = scopeRange ?? {
-    from: new Date("2000-01-01"),
-    to: new Date("2099-12-31"),
-  };
+  const pnlRange = scopeRange ?? { from: new Date("2000-01-01"), to: new Date("2099-12-31") };
   const pnlRows = await Promise.all(
     projectsInScope.map(async (p) => {
       const pnlRow = await getProjectPnl(p.id, pnlRange);
-      // directMaterial already includes the project-level materialsSupplied override.
       return {
         ...pnlRow,
         material: pnlRow.directMaterial,
@@ -260,8 +254,9 @@ export default async function DashboardPage({
     overhead: pnlRows.reduce<Decimal>((a, r) => a.plus(r.overhead), zero()),
     netPnl: pnlRows.reduce<Decimal>((a, r) => a.plus(r.netPnl), zero()),
   };
-  const contribNeg = pnl.contribution.lt(0);
-  const netNeg = pnl.netPnl.lt(0);
+  const marginPct = pnl.revenue.isZero()
+    ? 0
+    : pnl.netPnl.dividedBy(pnl.revenue).times(100).toDecimalPlaces(1).toNumber();
 
   const scopedBilled = toDecimal(scopedBilledAgg._sum.grandTotal ?? 0);
   const allTimeBilled = toDecimal(allTimeBilledAgg._sum.grandTotal ?? 0);
@@ -273,9 +268,7 @@ export default async function DashboardPage({
   for (let i = 0; i < 12; i++) {
     months.push(new Date(now.getFullYear(), now.getMonth() - 11 + i, 1));
   }
-  const trendMap = new Map<string, number>(
-    months.map((m) => [monthKey(m), 0]),
-  );
+  const trendMap = new Map<string, number>(months.map((m) => [monthKey(m), 0]));
   trendInvoices.forEach((inv) => {
     if (!inv.issuedAt) return;
     const k = monthKey(inv.issuedAt);
@@ -286,6 +279,12 @@ export default async function DashboardPage({
   const trendValues = months.map((m) => trendMap.get(monthKey(m)) ?? 0);
   const maxTrend = Math.max(1, ...trendValues);
 
+  const STATUS_TONE: Record<string, keyof typeof SAB> = {
+    "In progress": "accent",
+    "Completed": "positive",
+    "On hold": "amber",
+    "Cancelled": "alert",
+  };
   const workStatusRows = workStatusGroups
     .map((g) => ({
       key: g.workStatus ?? "— not set —",
@@ -295,19 +294,12 @@ export default async function DashboardPage({
   const totalProjects = workStatusRows.reduce((a, r) => a + r.count, 0);
 
   const greeting =
-    now.getHours() < 12
-      ? "Good morning"
-      : now.getHours() < 18
-        ? "Good afternoon"
-        : "Good evening";
-
-  const cardLinkCls =
-    "block rounded-md transition hover:ring-2 hover:ring-brand/30 focus:outline-none focus:ring-2 focus:ring-brand/40";
+    now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <div>
       <PageHeader
-        eyebrow="Overview"
+        eyebrow="Operations · Overview"
         title={`${greeting}, ${session.user.name?.split(" ")[0] ?? "there"}`}
         description={`Portfolio · ${projects.length} projects · ${clientSet.size} clients · ${scopeLabel}${selectedDescription ? ` · ${selectedDescription}` : ""}`}
         actions={
@@ -323,330 +315,563 @@ export default async function DashboardPage({
               current={selectedDescription}
               options={descriptionOptions}
             />
-            <Link href="/reports">
-              <Button variant="outline" size="sm">
-                <Download className="h-3.5 w-3.5" /> Export
-              </Button>
+            <Link href="/reports" style={{ textDecoration: "none" }}>
+              <Btn variant="outline" size="sm" icon="download">
+                Export
+              </Btn>
             </Link>
-            <Link href="/projects/new">
-              <Button size="sm">
-                <Plus className="h-3.5 w-3.5" /> New project
-              </Button>
+            <Link href="/projects/new" style={{ textDecoration: "none" }}>
+              <Btn variant="primary" size="sm" icon="plus">
+                New project
+              </Btn>
             </Link>
           </>
         }
       />
 
-      <div className="mb-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Link
-          href={
-            fyYear
-              ? `/projects?fy=${istFyLabel(new Date(fyYear, 5, 1))}`
-              : "/projects"
-          }
-          scroll={false}
-          className={cardLinkCls}
-        >
-          <StatCard
+      {/* ─── 4 KPIs ─────────────────────────────────────── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: 16,
+        }}
+      >
+        <Link href={fyYear ? `/projects?fy=${istFyLabel(new Date(fyYear, 5, 1))}` : "/projects"} style={{ textDecoration: "none" }}>
+          <KPI
             label="Portfolio PO Value"
-            value={formatINRCompact(poTotal)}
+            value={inr(poTotal.toNumber())}
             sub={`${projectsInScope.length} POs · ${scopeLabel}`}
+            spark={<Sparkline values={trendValues} width={140} height={24} />}
           />
         </Link>
         <Link
-          href={
-            fyYear
-              ? `/invoices?fyLabel=${encodeURIComponent(istFyLabel(new Date(fyYear, 5, 1)))}`
-              : "/invoices"
-          }
-          scroll={false}
-          className={cardLinkCls}
+          href={fyYear ? `/invoices?fyLabel=${encodeURIComponent(istFyLabel(new Date(fyYear, 5, 1)))}` : "/invoices"}
+          style={{ textDecoration: "none" }}
         >
-          <StatCard
+          <KPI
             label={`Billed · ${scopeLabel}`}
-            value={formatINRCompact(scopedBilled)}
+            value={inr(scopedBilled.toNumber())}
             sub={`${scopedBilledAgg._count._all} invoices ${scopeLabel === "All-time" ? "all-time" : "in " + scopeLabel}`}
+            spark={<Sparkbars values={trendValues} height={24} />}
           />
         </Link>
-        <Link
-          href="/projects?needBill=yes"
-          scroll={false}
-          className={cardLinkCls}
-        >
-          <StatCard
-            label="Outstanding Billable"
-            value={formatINRCompact(outstandingBillable)}
+        <Link href="/projects?needBill=yes" style={{ textDecoration: "none" }}>
+          <KPI
+            label="Outstanding billable"
+            value={inr(outstandingBillable.toNumber())}
             sub={`${needBillCount} POs need billing · ${scopeLabel}`}
+            accent
           />
         </Link>
-        <Link
-          href="/invoices?status=ISSUED"
-          scroll={false}
-          className={cardLinkCls}
-        >
-          <StatCard
+        <Link href="/invoices?status=ISSUED" style={{ textDecoration: "none" }}>
+          <KPI
             label="Receivables"
-            value={formatINRCompact(receivables)}
+            value={inr(receivables.toNumber())}
             sub={`${awaitingPaymentCount} invoices awaiting payment · ${scopeLabel}`}
           />
         </Link>
       </div>
 
-      <div className="mb-5 rounded-md border border-slate-200 bg-white p-5 shadow-card">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      {/* ─── PnL strip ─────────────────────────────────── */}
+      <div
+        style={{
+          marginTop: 16,
+          background: SAB.card,
+          border: `1px solid ${SAB.rule}`,
+          borderRadius: 4,
+          padding: 18,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div>
-            <div className="text-[14px] font-semibold text-slate-900">
-              Portfolio P&L · {scopeLabel}
+            <div style={{ fontSize: 14, fontWeight: 600, color: SAB.ink }}>
+              Portfolio P&amp;L · {scopeLabel}
             </div>
-            <div className="text-[11px] text-slate-500">
-              Revenue, direct costs, overhead and net result across all projects
-              {fyYear ? " (1-Apr → 31-Mar)" : " — all years combined"}
+            <div style={{ fontSize: 11.5, color: SAB.ink3, marginTop: 2 }}>
+              Revenue less direct costs and overhead, computed on-demand from invoices + ledger
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/reports"
-              className="text-[11px] font-medium text-brand hover:underline"
-            >
-              Full P&L report →
-            </Link>
-          </div>
+          <Link
+            href="/reports"
+            style={{
+              fontSize: 12,
+              color: SAB.accentInk,
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
+          >
+            Full P&amp;L report →
+          </Link>
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
-          <PnlStat label="Revenue" value={formatINRCompact(pnl.revenue)} />
-          <PnlStat label="Labor" value={formatINRCompact(pnl.labor)} muted />
-          <PnlStat label="Material" value={formatINRCompact(pnl.material)} muted />
-          <PnlStat label="Other" value={formatINRCompact(pnl.other)} muted />
-          <PnlStat
-            label="Contribution"
-            value={formatINRCompact(pnl.contribution)}
-            tone={contribNeg ? "red" : "emerald"}
-          />
-          <PnlStat label="Overhead" value={formatINRCompact(pnl.overhead)} muted />
-          <PnlStat
-            label="Net P&L"
-            value={formatINRCompact(pnl.netPnl)}
-            tone={netNeg ? "red" : "emerald"}
-            bold
-          />
-        </div>
+        <PnlStrip
+          revenue={pnl.revenue.toNumber()}
+          labor={pnl.labor.toNumber()}
+          material={pnl.material.toNumber()}
+          other={pnl.other.toNumber()}
+          contribution={pnl.contribution.toNumber()}
+          overhead={pnl.overhead.toNumber()}
+          netPnl={pnl.netPnl.toNumber()}
+          marginPct={marginPct}
+        />
       </div>
 
-      <div className="mb-5 grid gap-4 lg:grid-cols-3">
-        <div className="rounded-md border border-slate-200 bg-white p-5 shadow-card lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
+      {/* ─── Billing chart + Action items ──────────────── */}
+      <div
+        style={{
+          marginTop: 16,
+          display: "grid",
+          gridTemplateColumns: "2fr 1fr",
+          gap: 16,
+        }}
+      >
+        <div style={{ background: SAB.card, border: `1px solid ${SAB.rule}`, borderRadius: 4, padding: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
             <div>
-              <div className="text-[14px] font-semibold text-slate-900">
+              <div style={{ fontSize: 14, fontWeight: 600, color: SAB.ink }}>
                 Monthly billing · last 12 months
               </div>
-              <div className="text-[11px] text-slate-500">
+              <div style={{ fontSize: 11.5, color: SAB.ink3, marginTop: 2 }}>
                 Sum of ISSUED + PAID invoice value by month
               </div>
             </div>
-            <div className="text-[11px] tabular-nums text-slate-600">
-              Total {formatINRCompact(allTimeBilled)} · all-time
+            <div
+              style={{
+                fontFamily: "var(--font-sab-mono), ui-monospace, monospace",
+                fontSize: 11,
+                color: SAB.ink3,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              Total {inr(allTimeBilled.toNumber())} · all-time
             </div>
           </div>
-          <div className="flex h-44 items-end gap-2">
-            {months.map((m, i) => {
-              const v = trendValues[i];
-              const h = Math.max(2, (v / maxTrend) * 100);
-              return (
-                <div
-                  key={monthKey(m)}
-                  className="flex-1 rounded-t-sm bg-brand transition hover:opacity-80"
-                  style={{ height: `${h}%` }}
-                  title={`${monthLabel(m)} · ${formatINR(v)}`}
-                />
-              );
-            })}
-          </div>
-          <div className="mt-2 flex justify-between text-[10px] text-slate-500">
-            {months
-              .filter((_, i) => i % 2 === 0)
-              .map((m) => (
-                <span key={monthKey(m)}>{monthLabel(m)}</span>
-              ))}
-          </div>
+          <BillingChart values={trendValues} months={months} maxVal={maxTrend} />
         </div>
 
-        <div className="rounded-md border border-slate-200 bg-white p-5 shadow-card">
-          <div className="text-[14px] font-semibold text-slate-900">
-            Action items
+        <div style={{ background: SAB.card, border: `1px solid ${SAB.rule}`, borderRadius: 4, padding: 18 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: SAB.ink }}>Action items</div>
+          <div style={{ fontSize: 11.5, color: SAB.ink3, marginTop: 2 }}>
+            Where to look next
           </div>
-          <div className="text-[11px] text-slate-500">Where to look next</div>
-          <ul className="mt-4 space-y-2 text-[12px]">
+          <div style={{ marginTop: 12 }}>
             <ActionItem
               href="/projects?needBill=yes"
               label="POs with unbilled balance"
               value={needBillCount}
-              money={formatINRCompact(outstandingBillable)}
-              tone={needBillCount > 0 ? "amber" : "slate"}
+              money={inr(outstandingBillable.toNumber())}
+              tone={needBillCount > 0 ? "amber" : "ink3"}
+              first
             />
             <ActionItem
               href="/invoices?status=ISSUED"
               label="Invoices awaiting payment"
               value={awaitingPaymentCount}
-              money={formatINRCompact(receivables)}
-              tone={awaitingPaymentCount > 0 ? "sky" : "slate"}
+              money={inr(receivables.toNumber())}
+              tone={awaitingPaymentCount > 0 ? "blue" : "ink3"}
             />
             <ActionItem
               href="/projects?fyNone=yes"
               label="Projects missing PO date"
               value={noPoDateCount}
-              tone={noPoDateCount > 0 ? "slate" : "emerald"}
+              tone={noPoDateCount > 0 ? "ink3" : "positive"}
             />
             <ActionItem
               href="/projects?responseNone=yes"
               label="Projects without response owner"
               value={noResponseCount}
-              tone={noResponseCount > 0 ? "slate" : "emerald"}
+              tone={noResponseCount > 0 ? "ink3" : "positive"}
             />
             <ActionItem
               href="/timesheets"
               label="Open timesheets"
               value={openTimesheets}
-              tone={openTimesheets > 0 ? "slate" : "emerald"}
+              tone={openTimesheets > 0 ? "ink3" : "positive"}
             />
             <ActionItem
               href="/inventory"
               label="Active SKUs"
               value={materialsCount}
-              tone="slate"
+              tone="ink3"
             />
-          </ul>
+          </div>
         </div>
       </div>
 
-      <div className="mb-5 grid gap-4 md:grid-cols-2">
-        <div className="rounded-md border border-slate-200 bg-white p-5 shadow-card">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-[14px] font-semibold text-slate-900">
-              Work status
-            </div>
-            <Link
-              href="/projects"
-              className="text-[11px] font-medium text-brand hover:underline"
-            >
+      {/* ─── Work status + Top 5 clients ──────────────── */}
+      <div
+        style={{
+          marginTop: 16,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 16,
+          paddingBottom: 24,
+        }}
+      >
+        <div style={{ background: SAB.card, border: `1px solid ${SAB.rule}`, borderRadius: 4, padding: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: SAB.ink }}>Work status</div>
+            <Link href="/projects" style={{ fontSize: 11, color: SAB.accentInk, textDecoration: "none", fontWeight: 500 }}>
               View all →
             </Link>
           </div>
-          <dl className="space-y-1.5 text-[12px]">
-            {workStatusRows.map((w) => {
-              const pct = totalProjects
-                ? Math.round((w.count / totalProjects) * 100)
-                : 0;
-              const isFilterable = w.key !== "— not set —";
-              const content = (
-                <>
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="truncate text-slate-700">{w.key}</dt>
-                    <dd className="flex shrink-0 items-center gap-3 tabular-nums">
-                      <span className="text-slate-500">{pct}%</span>
-                      <span className="font-semibold text-slate-900">
-                        {w.count}
-                      </span>
-                    </dd>
-                  </div>
-                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-brand"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </>
-              );
-              return isFilterable ? (
-                <Link
-                  key={w.key}
-                  href={`/projects?workStatus=${encodeURIComponent(w.key)}`}
-                  scroll={false}
-                  className="-mx-2 block rounded px-2 py-1.5 transition hover:bg-slate-50"
+          {workStatusRows.map((w, i) => {
+            const pct = totalProjects ? Math.round((w.count / totalProjects) * 100) : 0;
+            const tone = STATUS_TONE[w.key] ?? "ink3";
+            const filterable = w.key !== "— not set —";
+            const content = (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontSize: 12.5,
+                  }}
                 >
-                  {content}
-                </Link>
-              ) : (
-                <div key={w.key} className="-mx-2 block rounded px-2 py-1.5">
-                  {content}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 6,
+                        background: (SAB as Record<string, string>)[tone as string],
+                      }}
+                    />
+                    <span style={{ color: SAB.ink2 }}>{w.key}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-sab-mono), ui-monospace, monospace",
+                        fontSize: 11,
+                        color: SAB.ink3,
+                      }}
+                    >
+                      {pct}%
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: SAB.ink,
+                        minWidth: 24,
+                        textAlign: "right",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {w.count}
+                    </span>
+                  </div>
                 </div>
-              );
-            })}
-          </dl>
+                <div style={{ height: 2, background: SAB.rule, marginTop: 5, overflow: "hidden", borderRadius: 2 }}>
+                  <div
+                    style={{
+                      width: `${pct}%`,
+                      maxWidth: "100%",
+                      height: "100%",
+                      background: (SAB as Record<string, string>)[tone as string],
+                      opacity: 0.8,
+                    }}
+                  />
+                </div>
+              </>
+            );
+            const rowStyle: React.CSSProperties = {
+              padding: "7px 0",
+              borderTop: i > 0 ? `1px dashed ${SAB.rule}` : "none",
+              display: "block",
+              textDecoration: "none",
+            };
+            return filterable ? (
+              <Link
+                key={w.key}
+                href={`/projects?workStatus=${encodeURIComponent(w.key)}`}
+                style={rowStyle}
+              >
+                {content}
+              </Link>
+            ) : (
+              <div key={w.key} style={rowStyle}>
+                {content}
+              </div>
+            );
+          })}
         </div>
 
-        <div className="rounded-md border border-slate-200 bg-white p-5 shadow-card">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-[14px] font-semibold text-slate-900">
-              Top 5 clients
+        <div style={{ background: SAB.card, border: `1px solid ${SAB.rule}`, borderRadius: 4, padding: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: SAB.ink }}>Top 5 clients</div>
+              <div style={{ fontSize: 11, color: SAB.ink3, marginTop: 1 }}>by PO value</div>
             </div>
-            <Link
-              href="/clients"
-              className="text-[11px] font-medium text-brand hover:underline"
-            >
+            <Link href="/clients" style={{ fontSize: 11, color: SAB.accentInk, textDecoration: "none", fontWeight: 500 }}>
               View all →
             </Link>
           </div>
-          <dl className="space-y-2 text-[12px]">
-            {topClients.map(([name, value]) => (
+          {topClients.map(([name, v], i) => {
+            const pct = v.pov.isZero() ? 0 : v.billed.dividedBy(v.pov).times(100).toNumber();
+            const outstanding = v.pov.minus(v.billed);
+            return (
               <Link
                 key={name}
                 href={`/projects?clientName=${encodeURIComponent(name)}`}
-                scroll={false}
-                className="-mx-2 flex items-center justify-between gap-3 rounded px-2 py-1.5 transition hover:bg-slate-50"
+                style={{
+                  display: "block",
+                  padding: "8px 0",
+                  borderTop: i > 0 ? `1px dashed ${SAB.rule}` : "none",
+                  textDecoration: "none",
+                }}
               >
-                <dt className="truncate font-medium text-slate-800" title={name}>
-                  {name}
-                </dt>
-                <dd className="shrink-0 font-semibold tabular-nums text-slate-900">
-                  {formatINRCompact(value)}
-                </dd>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12.5 }}>
+                  <div
+                    style={{
+                      color: SAB.ink,
+                      fontWeight: 500,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {name}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-sab-mono), ui-monospace, monospace",
+                      fontSize: 11.5,
+                      color: SAB.ink,
+                      fontWeight: 600,
+                      flex: "none",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {inr(v.pov.toNumber())}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontFamily: "var(--font-sab-mono), ui-monospace, monospace",
+                    fontSize: 10,
+                    color: SAB.ink3,
+                    marginTop: 3,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  <span>
+                    {v.pos} POs · billed {inr(v.billed.toNumber())}
+                  </span>
+                  <span>out {inr(outstanding.toNumber())}</span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    height: 3,
+                    background: SAB.rule,
+                    marginTop: 5,
+                    borderRadius: 3,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div style={{ width: `${pct}%`, background: SAB.positive }} />
+                  <div style={{ width: `${100 - pct}%`, background: SAB.accent, opacity: 0.35 }} />
+                </div>
               </Link>
-            ))}
-            {topClients.length === 0 && (
-              <div className="text-slate-500">No clients yet.</div>
-            )}
-          </dl>
+            );
+          })}
+          {topClients.length === 0 && (
+            <div style={{ fontSize: 12, color: SAB.ink3, padding: "8px 0" }}>No clients yet.</div>
+          )}
         </div>
       </div>
-
     </div>
   );
 }
 
-function PnlStat({
-  label,
-  value,
-  tone,
-  bold,
-  muted,
+function PnlStrip({
+  revenue,
+  labor,
+  material,
+  other,
+  contribution,
+  overhead,
+  netPnl,
+  marginPct,
 }: {
-  label: string;
-  value: string;
-  tone?: "red" | "emerald";
-  bold?: boolean;
-  muted?: boolean;
+  revenue: number;
+  labor: number;
+  material: number;
+  other: number;
+  contribution: number;
+  overhead: number;
+  netPnl: number;
+  marginPct: number;
 }) {
-  const valueCls =
-    tone === "red"
-      ? "text-red-700"
-      : tone === "emerald"
-        ? "text-emerald-700"
-        : muted
-          ? "text-slate-700"
-          : "text-slate-900";
+  const cols: { k: string; v: number; tone: "ink" | "muted" | "positive" | "alert"; bold?: boolean; hero?: boolean }[] = [
+    { k: "Revenue", v: revenue, tone: "ink", bold: true },
+    { k: "Labor", v: labor, tone: "muted" },
+    { k: "Material", v: material, tone: "muted" },
+    { k: "Other", v: other, tone: "muted" },
+    { k: "Contribution", v: contribution, tone: contribution >= 0 ? "positive" : "alert" },
+    { k: "Overhead", v: overhead, tone: "muted" },
+    { k: "Net P&L", v: netPnl, tone: netPnl >= 0 ? "positive" : "alert", bold: true, hero: true },
+  ];
   return (
-    <div className="rounded-md border border-slate-100 bg-slate-50/60 px-3 py-2.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-        {label}
-      </div>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(7, 1fr)",
+        gap: 1,
+        background: SAB.rule,
+        borderRadius: 3,
+        overflow: "hidden",
+      }}
+    >
+      {cols.map((c) => {
+        const fg =
+          c.tone === "positive"
+            ? SAB.positive
+            : c.tone === "alert"
+              ? SAB.alert
+              : c.tone === "muted"
+                ? SAB.ink2
+                : SAB.ink;
+        return (
+          <div
+            key={c.k}
+            style={{
+              padding: "12px 14px",
+              background: c.hero ? SAB.accentWash : SAB.card,
+            }}
+          >
+            <div className="sab-caps">{c.k}</div>
+            <div
+              style={{
+                fontSize: c.bold ? 18 : 15,
+                fontWeight: c.bold ? 600 : 500,
+                color: c.hero ? SAB.accentInk : fg,
+                marginTop: 4,
+                fontVariantNumeric: "tabular-nums",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {inr(c.v)}
+            </div>
+            {c.hero && (
+              <div
+                style={{
+                  fontFamily: "var(--font-sab-mono), ui-monospace, monospace",
+                  fontSize: 10,
+                  color: netPnl >= 0 ? SAB.positive : SAB.alert,
+                  marginTop: 2,
+                }}
+              >
+                {marginPct}% margin
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BillingChart({
+  values,
+  months,
+  maxVal,
+}: {
+  values: number[];
+  months: Date[];
+  maxVal: number;
+}) {
+  return (
+    <div>
       <div
-        className={
-          (bold ? "text-[16px] font-semibold " : "text-[14px] font-medium ") +
-          "tabular-nums " +
-          valueCls
-        }
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 6,
+          height: 140,
+          position: "relative",
+        }}
       >
-        {value}
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: `${t * 100}%`,
+                borderTop: `1px dashed ${SAB.rule}`,
+              }}
+            />
+          ))}
+        </div>
+        {values.map((v, i) => {
+          const h = Math.max(2, (v / maxVal) * 100);
+          const last = i === values.length - 1;
+          return (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                position: "relative",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-end",
+              }}
+            >
+              <div
+                style={{
+                  height: `${h}%`,
+                  background: last ? SAB.accent : SAB.ink,
+                  opacity: last ? 1 : 0.82,
+                  borderRadius: "1px 1px 0 0",
+                  position: "relative",
+                }}
+              >
+                {last && v > 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: -22,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      fontFamily: "var(--font-sab-mono), ui-monospace, monospace",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: SAB.accentInk,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {inr(v)}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+        {months.map((m, i) => (
+          <div
+            key={i}
+            style={{
+              flex: 1,
+              textAlign: "center",
+              fontFamily: "var(--font-sab-mono), ui-monospace, monospace",
+              fontSize: 9.5,
+              color: SAB.ink3,
+            }}
+          >
+            {monthLabel(m)}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -658,39 +883,69 @@ function ActionItem({
   value,
   money,
   tone,
+  first = false,
 }: {
   href: string;
   label: string;
   value: number;
   money?: string;
-  tone: "amber" | "sky" | "emerald" | "slate";
+  tone: "amber" | "blue" | "alert" | "positive" | "ink3";
+  first?: boolean;
 }) {
-  const dotCls =
-    tone === "amber"
-      ? "bg-amber-500"
-      : tone === "sky"
-        ? "bg-sky-500"
-        : tone === "emerald"
-          ? "bg-emerald-500"
-          : "bg-slate-400";
+  const dot: Record<string, string> = {
+    amber: SAB.amber,
+    blue: SAB.blue,
+    alert: SAB.alert,
+    positive: SAB.positive,
+    ink3: SAB.ink3,
+  };
   return (
-    <li>
-      <Link
-        href={href}
-        className="-mx-2 flex items-center justify-between rounded px-2 py-1.5 transition hover:bg-slate-50"
+    <Link
+      href={href}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 0",
+        borderTop: first ? "none" : `1px dashed ${SAB.rule}`,
+        textDecoration: "none",
+      }}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: 6,
+          background: dot[tone],
+          flex: "none",
+        }}
+      />
+      <div style={{ flex: 1, fontSize: 12.5, color: SAB.ink2 }}>{label}</div>
+      {money && (
+        <div
+          style={{
+            fontFamily: "var(--font-sab-mono), ui-monospace, monospace",
+            fontSize: 11,
+            color: SAB.ink3,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {money}
+        </div>
+      )}
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: SAB.ink,
+          minWidth: 28,
+          textAlign: "right",
+          fontVariantNumeric: "tabular-nums",
+        }}
       >
-        <span className="flex items-center gap-2 text-slate-700">
-          <span className={`h-1.5 w-1.5 rounded-full ${dotCls}`} />
-          {label}
-        </span>
-        <span className="flex items-center gap-2 tabular-nums">
-          {money && <span className="text-[11px] text-slate-500">{money}</span>}
-          <span className="min-w-[24px] text-right font-semibold text-slate-900">
-            {value}
-          </span>
-          <ArrowUpRight className="h-3 w-3 text-slate-400" />
-        </span>
-      </Link>
-    </li>
+        {value}
+      </div>
+      <Icon name="chevRight" size={12} style={{ color: SAB.ink4 }} />
+    </Link>
   );
 }

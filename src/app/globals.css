@@ -2,129 +2,150 @@
 @tailwind components;
 @tailwind utilities;
 
+/* SAB India Tracker — warm-paper editorial theme
+ * Ported from the Claude Design handoff (sab_handoff/sab-tracker/project/sab/system.jsx).
+ * Shell: oklch warm paper. Ink scale: 60° hue. Accent: signal orange.
+ * HSL fallbacks match the oklch values as closely as sRGB allows for shadcn/ui classes.
+ */
+
 @layer base {
   :root {
-    /* Page canvas — cool off-white, lets white cards pop */
-    --background: 216 29% 96%;
-    --foreground: 222 47% 11%;
+    /* ─── Surface: warm paper ─────────────────────────────────── */
+    --background: 44 44% 96%;           /* oklch(0.985 0.003 80) -> warm paper */
+    --foreground: 32 10% 20%;           /* oklch(0.22 0.01 60)   -> ink */
 
-    /* Cards — pure white, slate-900 text */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 32 10% 20%;
 
-    /* Popovers inherit card */
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 32 10% 20%;
 
-    /* Primary = Sapphire #0B5CAD */
-    --primary: 210 88% 36%;
+    /* ─── Primary = signal orange ─────────────────────────────── */
+    --primary: 22 75% 58%;              /* oklch(0.68 0.16 45) */
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary — slate-200 surface for quiet chrome */
-    --secondary: 214 32% 91%;
-    --secondary-foreground: 222 47% 11%;
+    /* ─── Secondary = paper-alt surface ───────────────────────── */
+    --secondary: 44 30% 94%;            /* oklch(0.975 0.004 80) */
+    --secondary-foreground: 32 10% 20%;
 
-    /* Muted — slate-50 / slate-500 */
-    --muted: 210 40% 98%;
-    --muted-foreground: 215 16% 47%;
+    /* ─── Muted ink scale ─────────────────────────────────────── */
+    --muted: 44 30% 94%;
+    --muted-foreground: 32 6% 46%;      /* oklch(0.55 0.01 60) */
 
-    /* Accent — light sapphire wash for hovers */
-    --accent: 214 100% 96%;
-    --accent-foreground: 210 88% 28%;
+    /* ─── Accent wash (cream, for hovers / active rows) ───────── */
+    --accent: 30 60% 95%;               /* oklch(0.965 0.022 55) */
+    --accent-foreground: 22 55% 38%;    /* oklch(0.42 0.14 45) */
 
-    /* Destructive — red-700 */
-    --destructive: 0 72% 46%;
+    /* ─── Destructive ─────────────────────────────────────────── */
+    --destructive: 12 75% 50%;          /* oklch(0.58 0.18 25) */
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders + inputs — slate-200; ring = sapphire */
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 210 88% 36%;
+    /* ─── Rules + rings ───────────────────────────────────────── */
+    --border: 44 20% 88%;               /* oklch(0.92 0.005 80) */
+    --input: 44 20% 88%;
+    --ring: 22 75% 58%;                 /* same as primary */
 
-    --radius: 0.375rem;
+    --radius: 0.25rem;                  /* prototype uses 4px corners */
 
-    /* Explicit brand channels for non-primitive usage */
-    --brand: 210 88% 36%;
-    --brand-hover: 210 88% 30%;
+    /* ─── Explicit brand channels ────────────────────────────── */
+    --brand: 22 75% 58%;
+    --brand-hover: 22 70% 50%;
     --brand-foreground: 0 0% 100%;
 
-    --success: 160 84% 30%;
-    --warning: 32 95% 44%;
-    --info: 199 89% 48%;
+    /* ─── Semantic status colours ────────────────────────────── */
+    --success: 155 38% 42%;             /* oklch(0.58 0.11 155) */
+    --success-wash: 155 40% 94%;
+    --warning: 78 50% 60%;              /* amber */
+    --warning-wash: 78 50% 94%;
+    --info: 240 32% 52%;                /* blue */
+    --info-wash: 240 30% 95%;
+
+    /* ─── Raw SAB tokens for inline styles (SVGs, dynamic) ───── */
+    --sab-paper: oklch(0.985 0.003 80);
+    --sab-paper-alt: oklch(0.975 0.004 80);
+    --sab-ink: oklch(0.22 0.01 60);
+    --sab-ink2: oklch(0.38 0.01 60);
+    --sab-ink3: oklch(0.55 0.01 60);
+    --sab-ink4: oklch(0.72 0.008 60);
+    --sab-rule: oklch(0.92 0.005 80);
+    --sab-rule-strong: oklch(0.86 0.006 80);
+    --sab-accent: oklch(0.68 0.16 45);
+    --sab-accent-ink: oklch(0.42 0.14 45);
+    --sab-accent-wash: oklch(0.965 0.022 55);
+    --sab-positive: oklch(0.58 0.11 155);
+    --sab-positive-wash: oklch(0.96 0.03 155);
+    --sab-alert: oklch(0.58 0.18 25);
+    --sab-alert-wash: oklch(0.965 0.04 25);
+    --sab-amber: oklch(0.74 0.14 78);
+    --sab-amber-wash: oklch(0.97 0.04 85);
+    --sab-blue: oklch(0.56 0.12 240);
+    --sab-blue-wash: oklch(0.965 0.02 240);
   }
 
   * {
     border-color: hsl(var(--border));
   }
 
+  html,
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+    background-color: var(--sab-paper);
+    color: var(--sab-ink);
+  }
+
+  body {
+    font-family: var(--font-sab-sans), "Inter Tight", "Inter", system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1, "tnum" 1, "ss01" 1;
     -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+  }
+
+  /* Editorial headings — tighter tracking, closer to display behaviour */
+  h1, h2, h3, h4 {
+    font-family: var(--font-sab-sans), "Inter Tight", system-ui, sans-serif;
+    letter-spacing: -0.02em;
   }
 
   /* Data-heavy tables default to tabular numerics */
   table {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Mono for codes, IDs, dates, keyboard shortcuts */
+  code, kbd, samp, pre {
+    font-family: var(--font-sab-mono), "IBM Plex Mono", ui-monospace, monospace;
+  }
 }
 
 @layer utilities {
-  .text-brand {
-    color: hsl(var(--brand));
-  }
-  .bg-brand {
-    background-color: hsl(var(--brand));
-  }
-  .bg-brand-hover:hover {
-    background-color: hsl(var(--brand-hover));
-  }
-  .border-brand {
-    border-color: hsl(var(--brand));
-  }
-  .ring-brand {
-    --tw-ring-color: hsl(var(--brand));
-  }
+  /* ─── Brand shortcuts ────────────────────────────────────────── */
+  .text-brand { color: hsl(var(--brand)); }
+  .bg-brand { background-color: hsl(var(--brand)); }
+  .bg-brand-hover:hover { background-color: hsl(var(--brand-hover)); }
+  .border-brand { border-color: hsl(var(--brand)); }
+  .ring-brand { --tw-ring-color: hsl(var(--brand)); }
 
-  .text-success {
-    color: hsl(var(--success));
-  }
-  .text-warning {
-    color: hsl(var(--warning));
-  }
-  .text-danger {
-    color: hsl(var(--destructive));
-  }
+  /* ─── Semantic colour utilities ──────────────────────────────── */
+  .text-success { color: hsl(var(--success)); }
+  .text-warning { color: hsl(var(--warning)); }
+  .text-danger  { color: hsl(var(--destructive)); }
 
-  /* Section eyebrow label, used above page titles and card headers */
-  .eyebrow {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: hsl(var(--muted-foreground));
-  }
-
-  /* Monospace project code */
-  .code-chip {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 11px;
-    font-weight: 500;
-    color: hsl(var(--brand));
-  }
-
-  /* ─── Claude-Design "Industrial Operations" helpers ──────────────
-   * Scoped additions used by the mobile shell. Existing utilities above
-   * are untouched; desktop pages keep their sapphire look.
-   */
+  /* ─── SAB editorial primitives ───────────────────────────────── */
   .sab-eyebrow {
     font-family: var(--font-sab-mono), ui-monospace, monospace;
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: oklch(0.55 0.01 60);
+    color: var(--sab-ink3);
+  }
+
+  .sab-caps {
+    font-family: var(--font-sab-mono), ui-monospace, monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sab-ink3);
   }
 
   .sab-code {
@@ -132,13 +153,38 @@
     font-size: 11px;
     font-weight: 500;
     letter-spacing: 0.01em;
-    color: oklch(0.42 0.14 45);
+    color: var(--sab-accent-ink);
   }
 
   .sab-tabular {
     font-variant-numeric: tabular-nums;
   }
 
+  /* Old alias kept so existing utilities survive the palette swap */
+  .eyebrow {
+    font-family: var(--font-sab-mono), ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sab-ink3);
+  }
+
+  .code-chip {
+    font-family: var(--font-sab-mono), ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--sab-accent-ink);
+  }
+
+  /* ─── Shell rules (1px hairlines, warm) ──────────────────────── */
+  .sab-rule-t { border-top: 1px solid var(--sab-rule); }
+  .sab-rule-b { border-bottom: 1px solid var(--sab-rule); }
+  .sab-rule-l { border-left: 1px solid var(--sab-rule); }
+  .sab-rule-r { border-right: 1px solid var(--sab-rule); }
+  .sab-rule-strong-b { border-bottom: 1px solid var(--sab-rule-strong); }
+
+  /* ─── Pulse for live indicators (punch widget, etc.) ─────────── */
   @keyframes sabPulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.3; }

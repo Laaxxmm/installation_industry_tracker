@@ -2,28 +2,32 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
+// Buttons now use the SAB warm-paper palette via token vars. The orange
+// primary action comes from --primary / --brand; ink-on-paper outlines
+// come from --border / --foreground.
+
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         default:
-          "bg-brand text-white shadow-sm hover:bg-brand-hover",
+          "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--brand-hover))]",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+          "bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))] hover:opacity-90",
         outline:
-          "border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900",
+          "border border-[hsl(var(--border))] bg-white text-[hsl(var(--foreground))] hover:bg-[hsl(var(--secondary))]",
         secondary:
-          "bg-slate-100 text-slate-900 shadow-sm hover:bg-slate-200",
-        ghost: "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
-        link: "text-brand underline-offset-4 hover:underline",
-        success:
-          "bg-success text-white shadow-sm hover:opacity-90",
+          "bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))] hover:opacity-90",
+        ghost:
+          "text-[hsl(var(--foreground))] hover:bg-[hsl(var(--secondary))]",
+        link: "text-[hsl(var(--brand))] underline-offset-4 hover:underline",
+        success: "bg-[hsl(var(--success))] text-white hover:opacity-90",
       },
       size: {
         default: "h-9 px-4 py-2 text-[13px]",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-6 text-sm",
+        sm: "h-8 rounded px-3 text-xs",
+        lg: "h-10 rounded px-6 text-sm",
         icon: "h-9 w-9",
       },
     },
