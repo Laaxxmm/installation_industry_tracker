@@ -1,0 +1,266 @@
+import { z } from "zod";
+
+export const decimalString = z.union([z.string(), z.number()]).transform((v) => String(v));
+
+export const ProjectInput = z.object({
+  name: z.string().min(2).max(120),
+  clientName: z.string().min(1).max(120),
+  contractValue: decimalString,
+  startDate: z.string().datetime().nullable().optional(),
+  endDate: z.string().datetime().nullable().optional(),
+  siteSupervisorId: z.string().nullable().optional(),
+  poDate: z.string().datetime().nullable().optional(),
+  poStatus: z.enum(["DRAFT", "ISSUED", "CANCELLED"]).nullable().optional(),
+  poNumber: z.string().max(80).nullable().optional(),
+  fileNo: z.string().max(40).nullable().optional(),
+  location: z.string().max(240).nullable().optional(),
+  description: z.string().max(500).nullable().optional(),
+  projectDetails: z.string().max(4000).nullable().optional(),
+  workStatus: z.string().max(120).nullable().optional(),
+  billedValue: decimalString.optional(),
+  adjBillableValue: decimalString.optional(),
+  response: z.string().max(2000).nullable().optional(),
+});
+export type ProjectInput = z.infer<typeof ProjectInput>;
+
+export const BudgetLineInput = z.object({
+  id: z.string().optional(),
+  projectId: z.string(),
+  category: z.enum(["MATERIAL", "LABOR", "OTHER"]),
+  description: z.string().min(1),
+  quantity: decimalString,
+  unitCost: decimalString,
+});
+export type BudgetLineInput = z.infer<typeof BudgetLineInput>;
+
+export const PunchInInput = z.object({
+  projectId: z.string(),
+  lat: z.number().nullable().optional(),
+  lng: z.number().nullable().optional(),
+});
+export type PunchInInput = z.infer<typeof PunchInInput>;
+
+export const UserInput = z.object({
+  email: z.string().email(),
+  name: z.string().min(1).max(120),
+  password: z.string().min(8).max(100),
+  role: z.enum(["ADMIN", "MANAGER", "SUPERVISOR", "EMPLOYEE"]),
+  employmentType: z.enum(["HOURLY", "SALARIED"]).nullable().optional(),
+});
+export type UserInput = z.infer<typeof UserInput>;
+
+export const RateCardInput = z.object({
+  userId: z.string(),
+  type: z.enum(["HOURLY", "SALARIED"]),
+  hourlyRate: decimalString.nullable().optional(),
+  monthlySalary: decimalString.nullable().optional(),
+  effectiveFrom: z.string().datetime(),
+  effectiveTo: z.string().datetime().nullable().optional(),
+});
+export type RateCardInput = z.infer<typeof RateCardInput>;
+
+export const MaterialInput = z.object({
+  sku: z.string().min(1).max(50),
+  name: z.string().min(1).max(120),
+  unit: z.string().min(1).max(20),
+});
+export type MaterialInput = z.infer<typeof MaterialInput>;
+
+export const StockReceiptInput = z.object({
+  materialId: z.string(),
+  qty: decimalString,
+  unitCost: decimalString,
+  supplier: z.string().max(120).optional(),
+  receivedAt: z.string().datetime(),
+  note: z.string().max(500).optional(),
+});
+export type StockReceiptInput = z.infer<typeof StockReceiptInput>;
+
+export const StockIssueInput = z.object({
+  materialId: z.string(),
+  projectId: z.string(),
+  qty: decimalString,
+  issuedAt: z.string().datetime(),
+  note: z.string().max(500).optional(),
+});
+export type StockIssueInput = z.infer<typeof StockIssueInput>;
+
+export const MaterialTransferInput = z
+  .object({
+    materialId: z.string(),
+    fromProjectId: z.string(),
+    toProjectId: z.string(),
+    qty: decimalString,
+    transferredAt: z.string().datetime(),
+    note: z.string().max(500).optional(),
+  })
+  .refine((v) => v.fromProjectId !== v.toProjectId, {
+    message: "From and To projects must differ",
+    path: ["toProjectId"],
+  });
+export type MaterialTransferInput = z.infer<typeof MaterialTransferInput>;
+
+export const DirectPurchaseInput = z.object({
+  projectId: z.string(),
+  description: z.string().min(1).max(200),
+  qty: decimalString,
+  unitCost: decimalString,
+  supplier: z.string().max(120).optional(),
+  purchasedAt: z.string().datetime(),
+  invoiceRef: z.string().max(50).optional(),
+  category: z.enum(["MATERIAL", "OTHER"]).default("MATERIAL"),
+});
+export type DirectPurchaseInput = z.infer<typeof DirectPurchaseInput>;
+
+export const OverheadInput = z.object({
+  projectId: z.string(),
+  periodMonth: z.string().datetime(),
+  amount: decimalString,
+  note: z.string().max(500).optional(),
+});
+export type OverheadInput = z.infer<typeof OverheadInput>;
+
+export const InvoiceInput = z.object({
+  projectId: z.string(),
+  invoiceNo: z.string().min(1).max(50),
+  amount: decimalString,
+  issuedAt: z.string().datetime(),
+  note: z.string().max(500).optional(),
+});
+export type InvoiceInput = z.infer<typeof InvoiceInput>;
+
+// ---------- Clients ----------
+
+const STATE_CODE = z
+  .string()
+  .regex(/^\d{2}$/, "State code must be a 2-digit GST code");
+const GSTIN = z
+  .string()
+  .regex(
+    /^\d{2}[A-Z]{5}\d{4}[A-Z]\d[A-Z]\d$/,
+    "GSTIN must be 15 characters: 2 digits + 5 letters + 4 digits + 1 letter + 1 digit + 1 letter + 1 digit",
+  );
+
+export const ClientInput = z.object({
+  name: z.string().min(1).max(200),
+  gstin: z.union([GSTIN, z.literal("")]).optional().transform((v) => (v ? v : undefined)),
+  pan: z
+    .union([z.string().regex(/^[A-Z]{5}\d{4}[A-Z]$/), z.literal("")])
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+  billingAddress: z.string().min(1).max(500),
+  shippingAddress: z.string().max(500).optional(),
+  stateCode: STATE_CODE,
+  contactName: z.string().max(120).optional(),
+  email: z
+    .union([z.string().email(), z.literal("")])
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+  phone: z.string().max(30).optional(),
+  notes: z.string().max(1000).optional(),
+});
+export type ClientInput = z.infer<typeof ClientInput>;
+
+// ---------- Quote ----------
+
+export const QuoteLineInput = z.object({
+  id: z.string().optional(),
+  category: z.enum(["MATERIAL", "LABOR", "OTHER"]),
+  description: z.string().min(1).max(500),
+  hsnSac: z.string().max(20).optional(),
+  quantity: decimalString,
+  unit: z.string().min(1).max(20),
+  unitPrice: decimalString,
+  discountPct: decimalString.default("0"),
+  gstRatePct: decimalString.default("0"),
+});
+export type QuoteLineInput = z.infer<typeof QuoteLineInput>;
+
+export const QuoteHeaderInput = z.object({
+  clientId: z.string(),
+  title: z.string().min(1).max(200),
+  validUntil: z.string().datetime().nullable().optional(),
+  placeOfSupplyStateCode: STATE_CODE,
+  notes: z.string().max(2000).optional(),
+  termsMd: z.string().max(5000).optional(),
+});
+export type QuoteHeaderInput = z.infer<typeof QuoteHeaderInput>;
+
+export const QuoteCreateInput = QuoteHeaderInput.extend({
+  lines: z.array(QuoteLineInput).default([]),
+});
+export type QuoteCreateInput = z.infer<typeof QuoteCreateInput>;
+
+export const ConvertQuoteInput = z.object({
+  quoteId: z.string(),
+  projectName: z.string().min(2).max(200),
+  startDate: z.string().datetime(),
+  endDate: z.string().datetime(),
+  siteSupervisorId: z.string().nullable().optional(),
+});
+export type ConvertQuoteInput = z.infer<typeof ConvertQuoteInput>;
+
+// ---------- Progress ----------
+
+export const MilestoneInput = z.object({
+  id: z.string().optional(),
+  projectId: z.string(),
+  stageKey: z.enum(["SURVEY", "DELIVERY", "INSTALL", "COMMISSION", "HANDOVER"]),
+  sortOrder: z.number().int().min(0).default(0),
+  name: z.string().min(1).max(200),
+  plannedStart: z.string().datetime().nullable().optional(),
+  plannedEnd: z.string().datetime().nullable().optional(),
+  weight: decimalString.default("1"),
+});
+export type MilestoneInput = z.infer<typeof MilestoneInput>;
+
+export const MilestonePercentInput = z.object({
+  milestoneId: z.string(),
+  percentComplete: decimalString,
+  status: z.enum(["PENDING", "IN_PROGRESS", "DONE", "BLOCKED"]).optional(),
+});
+export type MilestonePercentInput = z.infer<typeof MilestonePercentInput>;
+
+export const StageDatesInput = z.object({
+  projectId: z.string(),
+  stageKey: z.enum(["SURVEY", "DELIVERY", "INSTALL", "COMMISSION", "HANDOVER"]),
+  plannedStart: z.string().datetime().nullable().optional(),
+  plannedEnd: z.string().datetime().nullable().optional(),
+  notes: z.string().max(500).optional(),
+});
+export type StageDatesInput = z.infer<typeof StageDatesInput>;
+
+// ---------- Client invoice (GST) ----------
+
+export const ClientInvoiceLineInput = z.object({
+  id: z.string().optional(),
+  description: z.string().min(1).max(500),
+  hsnSac: z.string().max(20).optional(),
+  quantity: decimalString,
+  unit: z.string().min(1).max(20),
+  unitPrice: decimalString,
+  discountPct: decimalString.default("0"),
+  gstRatePct: decimalString.default("0"),
+});
+export type ClientInvoiceLineInput = z.infer<typeof ClientInvoiceLineInput>;
+
+export const ClientInvoiceCreateInput = z.object({
+  projectId: z.string(),
+  kind: z.enum(["ADVANCE", "PROGRESS", "FINAL", "ADHOC"]),
+  placeOfSupplyStateCode: STATE_CODE,
+  dueAt: z.string().datetime().nullable().optional(),
+  poRef: z.string().max(100).optional(),
+  notes: z.string().max(2000).optional(),
+  termsMd: z.string().max(5000).optional(),
+  lines: z.array(ClientInvoiceLineInput).default([]),
+});
+export type ClientInvoiceCreateInput = z.infer<typeof ClientInvoiceCreateInput>;
+
+export const POUpdateInput = z.object({
+  poId: z.string(),
+  clientPoNumber: z.string().max(80).optional(),
+  clientPoDate: z.string().datetime().nullable().optional(),
+  plannedStart: z.string().datetime().optional(),
+  plannedEnd: z.string().datetime().optional(),
+});
+export type POUpdateInput = z.infer<typeof POUpdateInput>;

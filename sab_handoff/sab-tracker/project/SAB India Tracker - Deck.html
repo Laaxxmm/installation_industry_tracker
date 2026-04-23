@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>SAB India Tracker — Export</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    html,body { margin:0; padding:0; background: oklch(0.985 0.003 80); font-family:'Inter Tight',system-ui,sans-serif; overflow:hidden; }
+    * { box-sizing: border-box; }
+    #deck { width: 100vw; height: 100vh; position: relative; overflow: hidden; background: oklch(0.96 0.006 80); }
+    .slide { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; padding: 40px; }
+    .slide.active { display: flex; }
+    .slide-inner { transform-origin: center center; }
+    .slide-label { position: absolute; top: 28px; left: 40px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.55 0.01 60); letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+    .slide-title { position: absolute; top: 46px; left: 40px; font-family: 'Inter Tight', system-ui; font-size: 18px; color: oklch(0.22 0.01 60); font-weight: 600; letter-spacing: -0.02em; }
+    .phone-shell { border-radius: 42px; background: #111; padding: 10px; box-shadow: 0 20px 50px rgba(0,0,0,.2); }
+    .phone-inner { border-radius: 34px; overflow: hidden; background: #fff; width: 100%; height: 100%; position: relative; }
+    .notch { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 110px; height: 26px; background: #000; border-radius: 18px; z-index: 20; }
+    .frame { box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 10px 30px rgba(40,30,20,.08); border-radius: 6px; overflow: hidden; background: #fff; }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="sab/system.jsx"></script>
+<script type="text/babel" src="sab/seed.jsx"></script>
+<script type="text/babel" src="sab/shell.jsx"></script>
+<script type="text/babel" src="sab/route-home.jsx"></script>
+<script type="text/babel" src="sab/route-projects.jsx"></script>
+<script type="text/babel" src="sab/route-project-detail.jsx"></script>
+<script type="text/babel" src="sab/route-rest.jsx"></script>
+<script type="text/babel" src="sab/mobile.jsx"></script>
+<script type="text/babel" src="sab/invoice.jsx"></script>
+<script type="text/babel" src="sab/app.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+function DeskFrame({ w, h, children, label }) {
+  return (
+    <div className="frame" style={{ width: w, height: h, background:'#fff' }}>
+      <div style={{ height: 28, background:'oklch(0.94 0.006 80)', borderBottom:'1px solid oklch(0.88 0.006 80)', display:'flex', alignItems:'center', padding:'0 12px', gap: 6 }}>
+        <span style={{ width:10, height:10, borderRadius:10, background:'#ed6a5e' }}/>
+        <span style={{ width:10, height:10, borderRadius:10, background:'#f5bf4f' }}/>
+        <span style={{ width:10, height:10, borderRadius:10, background:'#62c554' }}/>
+        <div style={{ flex:1, textAlign:'center', fontFamily:'IBM Plex Mono,monospace', fontSize:11, color:'oklch(0.55 0.01 60)' }}>
+          tracker.sabindia.in {label ? `· ${label}` : ''}
+        </div>
+      </div>
+      <div style={{ width:'100%', height:`calc(100% - 28px)` }}>{children}</div>
+    </div>
+  );
+}
+
+function Phone({ children, w, h }) {
+  return (
+    <div className="phone-shell" style={{ width: w + 20, height: h + 20 }}>
+      <div className="phone-inner">
+        <div className="notch"/>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DesktopDetail() {
+  return (
+    <div style={{ width:'100%', height:'100%', display:'flex', background: TOKENS.paper, fontFamily: FONT.sans, overflow:'hidden' }}>
+      <Sidebar current="projects" onNav={() => {}} collapsed={false} onToggle={() => {}}/>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth: 0 }}>
+        <TopBar title="SAB-26-0041 — Fire hydrant system"/>
+        <div style={{ flex:1, overflowY:'auto' }}>
+          <ProjectDetailRoute onNav={() => {}}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BrandSheet() {
+  const swatches = [
+    { n:'Paper',    v:'oklch(0.985 0.003 80)' },
+    { n:'Ink',      v:'oklch(0.22 0.01 60)' },
+    { n:'Ink-2',    v:'oklch(0.38 0.01 60)' },
+    { n:'Ink-3',    v:'oklch(0.55 0.01 60)' },
+    { n:'Rule',     v:'oklch(0.92 0.005 80)' },
+    { n:'Accent',   v:'oklch(0.68 0.16 45)' },
+    { n:'Accent-ink', v:'oklch(0.42 0.14 45)' },
+    { n:'Positive', v:'oklch(0.58 0.11 155)' },
+    { n:'Alert',    v:'oklch(0.58 0.18 25)' },
+    { n:'Amber',    v:'oklch(0.74 0.14 78)' },
+    { n:'Blue',     v:'oklch(0.56 0.12 240)' },
+    { n:'Paper-alt',v:'oklch(0.975 0.004 80)' },
+  ];
+  return (
+    <div style={{ width: 1200, padding: 40, background: TOKENS.paper, fontFamily: FONT.sans }}>
+      <Wordmark size={20}/>
+      <div style={{ fontFamily: FONT.mono, fontSize: 10, color: TOKENS.ink3, letterSpacing:'.15em', textTransform:'uppercase', fontWeight: 600, marginTop: 14 }}>Design system · v0.1</div>
+      <h1 style={{ fontFamily: FONT.sans, fontSize: 32, fontWeight: 600, letterSpacing:'-0.03em', margin:'4px 0 20px' }}>Industrial operations, papered.</h1>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(6, 1fr)', gap: 10, marginBottom: 24 }}>
+        {swatches.map((s, i) => (
+          <div key={i} style={{ border:`1px solid ${TOKENS.rule}`, borderRadius: 4, overflow:'hidden', background:'#fff' }}>
+            <div style={{ height: 72, background: s.v }}/>
+            <div style={{ padding: 10 }}>
+              <div style={{ fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, color: TOKENS.ink }}>{s.n}</div>
+              <div style={{ fontFamily: FONT.mono, fontSize: 9.5, color: TOKENS.ink3, marginTop: 2 }}>{s.v}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ background: TOKENS.card, border: `1px solid ${TOKENS.rule}`, borderRadius: 4, padding: 24, marginBottom: 16 }}>
+        <div style={{ fontFamily: FONT.mono, fontSize: 10, color: TOKENS.ink3, letterSpacing:'.1em', textTransform:'uppercase', fontWeight: 600, marginBottom: 14 }}>Type scale</div>
+        {[
+          { c:'Industrial operations, papered.', s: 32, w: 600, ls:'-0.03em', f: FONT.sans },
+          { c:'Fire hydrant system — Block A & B', s: 24, w: 600, ls:'-0.025em', f: FONT.sans },
+          { c:'Portfolio P&L · FY 25-26', s: 16, w: 600, f: FONT.sans },
+          { c:'SAB-26-0041 · APL/PO/26/0847', s: 13, w: 500, f: FONT.mono, color: TOKENS.accentInk },
+        ].map((t, i) => (
+          <div key={i} style={{ padding: '6px 0', fontFamily: t.f, fontSize: t.s, fontWeight: t.w, letterSpacing: t.ls || 'normal', color: t.color || TOKENS.ink }}>{t.c}</div>
+        ))}
+      </div>
+      <div style={{ background: TOKENS.card, border: `1px solid ${TOKENS.rule}`, borderRadius: 4, padding: 20 }}>
+        <div style={{ fontFamily: FONT.mono, fontSize: 10, color: TOKENS.ink3, letterSpacing:'.1em', textTransform:'uppercase', fontWeight: 600, marginBottom: 12 }}>Status pills</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap: 8 }}>
+          <Pill tone="blue" dot>IN PROGRESS</Pill>
+          <Pill tone="positive" dot>COMMISSIONED</Pill>
+          <Pill tone="positive" dot>PAID</Pill>
+          <Pill tone="amber" dot>MATERIAL READY</Pill>
+          <Pill tone="alert" dot>ON HOLD</Pill>
+          <Pill tone="alert" dot>LOW STOCK</Pill>
+          <Pill tone="ink" dot>DRAFT</Pill>
+          <Pill tone="accent" dot>FY 25-26</Pill>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Each slide: { label, title, el, w, h }
+const SLIDES = [
+  { label:'01 · Foundation', title:'Brand tokens, type, status', w: 1280, h: 900, render: () => <BrandSheet/> },
+  { label:'02 · Entry',      title:'Sign-in', w: 1400, h: 900, render: () => <div className="frame" style={{ width:1400, height: 900 }}><LoginScreen/></div> },
+  { label:'03 · Desktop · home',      title:'Operations overview', w: 1400, h: 950, render: () => <DeskFrame w={1400} h={950} label="home"><DesktopApp startRoute="home"/></DeskFrame> },
+  { label:'04 · Desktop · projects',  title:'Projects list', w: 1400, h: 950, render: () => <DeskFrame w={1400} h={950} label="projects"><DesktopApp startRoute="projects"/></DeskFrame> },
+  { label:'05 · Desktop · detail',    title:'SAB-26-0041 · project hero', w: 1400, h: 1000, render: () => <DeskFrame w={1400} h={1000} label="SAB-26-0041"><DesktopDetail/></DeskFrame> },
+  { label:'06 · Desktop · invoices',  title:'Tax invoices', w: 1400, h: 900, render: () => <DeskFrame w={1400} h={900} label="invoices"><DesktopApp startRoute="invoices"/></DeskFrame> },
+  { label:'07 · Desktop · quotes',    title:'Quotes pipeline', w: 1400, h: 900, render: () => <DeskFrame w={1400} h={900} label="quotes"><DesktopApp startRoute="quotes"/></DeskFrame> },
+  { label:'08 · Desktop · inventory', title:'Inventory', w: 1400, h: 900, render: () => <DeskFrame w={1400} h={900} label="inventory"><DesktopApp startRoute="inventory"/></DeskFrame> },
+  { label:'09 · Desktop · timesheets',title:'Timesheets', w: 1400, h: 900, render: () => <DeskFrame w={1400} h={900} label="timesheets"><DesktopApp startRoute="timesheets"/></DeskFrame> },
+  { label:'10 · Desktop · reports',   title:'Reports index', w: 1400, h: 900, render: () => <DeskFrame w={1400} h={900} label="reports"><DesktopApp startRoute="reports"/></DeskFrame> },
+  { label:'11 · Mobile',   title:'Site crew punch app — ready + live', w: 850, h: 830, render: () => (
+    <div style={{ display:'flex', gap: 32 }}>
+      <Phone w={380} h={800}><MobilePunchApp state="ready"/></Phone>
+      <Phone w={380} h={800}><MobilePunchApp state="punchedIn"/></Phone>
+    </div>
+  )},
+  { label:'12 · Documents · invoice', title:'Tax invoice · A4 · GST compliant', w: 800, h: 1123, render: () => <InvoicePDF/> },
+  { label:'13 · Documents · share',   title:'Client share view', w: 1100, h: 900, render: () => <DeskFrame w={1100} h={900} label="share.sabindia.in/SAB-26-0041"><ClientShareView/></DeskFrame> },
+];
+
+function Slide({ slide, index, total }) {
+  const ref = React.useRef(null);
+  const [scale, setScale] = React.useState(1);
+  React.useLayoutEffect(() => {
+    const fit = () => {
+      if (!ref.current) return;
+      const pad = 120;
+      const vw = window.innerWidth - pad;
+      const vh = window.innerHeight - pad;
+      setScale(Math.min(vw / slide.w, vh / slide.h, 1));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [slide]);
+
+  return (
+    <>
+      <div className="slide-label">{slide.label}</div>
+      <div className="slide-title">{slide.title}</div>
+      <div className="slide-inner" ref={ref} style={{ transform: `scale(${scale})`, width: slide.w, height: slide.h }}>
+        {slide.render()}
+      </div>
+      <div style={{ position:'absolute', bottom: 24, right: 40, fontFamily:'IBM Plex Mono,monospace', fontSize: 11, color:'oklch(0.55 0.01 60)', letterSpacing:'.08em' }}>
+        {String(index + 1).padStart(2,'0')} / {String(total).padStart(2,'0')}
+      </div>
+    </>
+  );
+}
+
+function Deck() {
+  const [i, setI] = React.useState(0);
+
+  React.useEffect(() => {
+    window.goToSlide = (n) => setI(Math.max(0, Math.min(SLIDES.length - 1, n)));
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') setI(x => Math.min(SLIDES.length - 1, x + 1));
+      if (e.key === 'ArrowLeft') setI(x => Math.max(0, x - 1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  return (
+    <div id="deck">
+      {SLIDES.map((s, idx) => (
+        <div key={idx} className={'slide' + (idx === i ? ' active' : '')}>
+          {idx === i && <Slide slide={s} index={idx} total={SLIDES.length}/>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Deck/>);
+</script>
+</body>
+</html>
