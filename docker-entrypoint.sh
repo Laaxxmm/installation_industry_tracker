@@ -1,10 +1,16 @@
 #!/bin/sh
 # SAB India Tracker — container entrypoint.
-# Verbose by design: every step prints a banner so the failure point is
-# obvious in Railway deploy logs. Set -e so any failure kills the
-# container instead of letting it limp into a broken healthcheck.
+# `set -x` traces every command to stderr so Railway's Deploy Logs tab
+# shows exactly what the container is doing line-by-line. Remove later
+# once boot is reliable.
 
-set -e
+# Print a sentinel BEFORE anything else, to both stdout and stderr,
+# so we can tell whether the script was ever exec'd vs. the runtime
+# refusing to start the container at all.
+echo "=== SAB ENTRYPOINT REACHED ==="
+echo "=== SAB ENTRYPOINT REACHED ===" 1>&2
+
+set -ex
 
 PORT="${PORT:-8080}"
 
@@ -16,7 +22,10 @@ echo "  PORT      = ${PORT}"
 echo "  HOSTNAME  = ${HOSTNAME:-<unset>}"
 echo "  PWD       = $(pwd)"
 echo "  whoami    = $(whoami)"
+echo "  id        = $(id)"
 echo "  node      = $(node --version 2>&1 || echo MISSING)"
+echo "  files in /app:"
+ls -la /app | head -20
 echo "  DATABASE_URL is $([ -n "${DATABASE_URL}" ] && echo SET || echo UNSET)"
 echo "  NEXTAUTH_SECRET is $([ -n "${NEXTAUTH_SECRET}" ] && echo SET || echo UNSET)"
 echo "  AUTH_SECRET is $([ -n "${AUTH_SECRET}" ] && echo SET || echo UNSET)"
@@ -26,33 +35,40 @@ echo "============================================================"
 
 if [ -z "$DATABASE_URL" ]; then
   echo "FATAL: DATABASE_URL is not set."
-  echo "       In Railway → service → Variables, set:"
+  echo "       In Railway service Variables, set:"
   echo "         DATABASE_URL = \${{ Postgres.DATABASE_URL }}"
-  echo "       (with the curly-brace reference, not the literal URL)"
+  echo "       (with the curly-brace reference syntax — Railway expands it)"
   exit 1
 fi
 
+# Disable -e for migrations so we can print our own message on failure.
+set +e
 echo "==> [1/3] prisma migrate deploy"
-if ! node node_modules/prisma/build/index.js migrate deploy; then
-  echo "FATAL: prisma migrate deploy failed (see Prisma error above)."
-  echo "       Common causes:"
-  echo "       - DATABASE_URL points at a host the container can't reach"
-  echo "       - The database user lacks CREATE/ALTER permissions"
-  echo "       - A previous failed migration left the _prisma_migrations table dirty"
+node node_modules/prisma/build/index.js migrate deploy
+MIGRATE_RC=$?
+set -e
+if [ "$MIGRATE_RC" -ne 0 ]; then
+  echo "FATAL: prisma migrate deploy failed (rc=$MIGRATE_RC)"
+  echo "       See the Prisma error above. Common causes:"
+  echo "       - DATABASE_URL host unreachable from this container"
+  echo "       - DB user lacks CREATE/ALTER permissions"
+  echo "       - _prisma_migrations table left dirty by a previous failed deploy"
   exit 1
 fi
 
 if [ "$SEED_DB" = "true" ]; then
-  echo "==> [2/3] SEED_DB=true → running prisma/seed.ts"
-  node node_modules/tsx/dist/cli.mjs prisma/seed.ts || {
-    echo "    Seed exited non-zero — usually means DB is already populated."
-    echo "    Continuing to start the server."
-  }
+  echo "==> [2/3] SEED_DB=true -> running prisma/seed.ts"
+  set +e
+  node node_modules/tsx/dist/cli.mjs prisma/seed.ts
+  SEED_RC=$?
+  set -e
+  if [ "$SEED_RC" -ne 0 ]; then
+    echo "    Seed exited rc=$SEED_RC. Continuing — likely already seeded."
+  fi
 else
   echo "==> [2/3] skipping seed (SEED_DB != true)"
 fi
 
 echo "==> [3/3] next start on 0.0.0.0:${PORT}"
-# Bypass npm — call the next binary directly so there is no chance of
-# npm script arg parsing eating the --port flag.
+# Bypass npm — call next directly so no script arg parsing can interfere.
 exec node node_modules/next/dist/bin/next start --hostname 0.0.0.0 --port "$PORT"

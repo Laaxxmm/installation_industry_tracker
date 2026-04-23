@@ -37,7 +37,9 @@ RUN npm run build
 
 # ---------- 3. runner ----------
 FROM node:20-alpine AS runner
-RUN apk add --no-cache libc6-compat openssl tini
+# tini removed temporarily — eliminates one variable while we debug boot.
+# Re-add once we have a healthy startup confirmed.
+RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -70,6 +72,8 @@ RUN sed -i 's/\r$//' docker-entrypoint.sh \
 USER nextjs
 EXPOSE 8080
 
-# tini reaps zombies and forwards signals (clean shutdown on Railway redeploys).
-# Absolute path to the script so $PWD / WORKDIR can't surprise us.
-ENTRYPOINT ["/sbin/tini", "--", "/app/docker-entrypoint.sh"]
+# Invoke via `sh` explicitly so the shebang line is not part of the
+# critical path. Absolute path to the script so $PWD can't surprise us.
+# Once boot is reliable, switch back to ENTRYPOINT for proper signal
+# handling and re-add tini.
+CMD ["sh", "/app/docker-entrypoint.sh"]
