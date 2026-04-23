@@ -7,15 +7,17 @@ import type {
   Project,
 } from "@prisma/client";
 import {
-  ClientBlock,
-  CompanyHeader,
+  BankAndNotes,
   Doc,
-  GstSummaryTable,
-  LineTable,
-  MetaBlock,
-  PageFooter,
-  SignatureBlock,
-  TotalsBlock,
+  EditorialFooter,
+  EditorialLineTable,
+  InfoCol,
+  InfoRow,
+  MasterHeader,
+  SubHeader,
+  TotalsStack,
+  money,
+  qty,
   styles,
 } from "./shared";
 import { summarise } from "@/lib/gst";
@@ -27,6 +29,16 @@ type FullInvoice = ClientInvoice & {
   client: Client;
   project: Project;
   lines: ClientInvoiceLine[];
+};
+
+const KIND_LABEL: Record<string, string> = {
+  ADVANCE: "Advance invoice",
+  PROGRESS: "Progress invoice",
+  FINAL: "Final invoice",
+  ADHOC: "Ad-hoc invoice",
+  AMC_CONTRACT: "AMC contract invoice",
+  AMC_INSTALLMENT: "AMC installment invoice",
+  SERVICE_CALL: "Service call invoice",
 };
 
 export function TaxInvoiceDocument({ invoice }: { invoice: FullInvoice }) {
@@ -45,116 +57,116 @@ export function TaxInvoiceDocument({ invoice }: { invoice: FullInvoice }) {
     placeOfSupplyStateCode: pos,
   });
 
-  const meta = [
-    `#${invoice.invoiceNo}`,
-    invoice.issuedAt
-      ? `Issued: ${formatIST(invoice.issuedAt, "dd-MM-yyyy")}`
-      : `Draft`,
-    invoice.dueAt ? `Due: ${formatIST(invoice.dueAt, "dd-MM-yyyy")}` : "",
-    `Kind: ${invoice.kind}`,
-  ].filter(Boolean);
+  const kindLabel = KIND_LABEL[invoice.kind] ?? invoice.kind;
+  const bankLines = sabBankDetails().split(/\n+/).filter(Boolean);
+
+  // Project info: accent mono code + name + optional PO ref.
+  const projectLines: Array<string | null> = [];
+  if (invoice.poRef) projectLines.push(`PO: ${invoice.poRef}`);
+
+  // Invoice type info: show kind + optional progress hint (cumulative billed
+  // relative to project contract value, if available).
+  const typeLines: string[] = [];
+  const amountPaid = Number(invoice.amountPaid ?? 0);
+  const grand = Number(summary.grandTotal);
+  if (amountPaid > 0) {
+    typeLines.push(`Paid so far: ${money(amountPaid)}`);
+  }
+  if (invoice.kind === "PROGRESS" || invoice.kind === "ADVANCE") {
+    typeLines.push(`This invoice: ${money(grand)}`);
+  }
 
   return (
     <Doc title={`Tax Invoice ${invoice.invoiceNo}`}>
-      <CompanyHeader title="TAX INVOICE" metaLines={meta} />
+      <MasterHeader docTitle="TAX INVOICE" docNumber={invoice.invoiceNo} />
 
-      <View style={styles.twoCol}>
-        <ClientBlock
+      <SubHeader
+        meta={[
+          [
+            "Issued",
+            invoice.issuedAt ? formatIST(invoice.issuedAt, "dd MMM yyyy") : "—",
+          ],
+          ["Due", invoice.dueAt ? formatIST(invoice.dueAt, "dd MMM yyyy") : "—"],
+          ["Terms", invoice.poRef ? `PO ${invoice.poRef}` : "Net 30"],
+        ]}
+      />
+
+      <InfoRow>
+        <InfoCol
           label="Bill to"
-          name={invoice.client.name}
-          gstin={invoice.client.gstin}
-          address={invoice.client.billingAddress}
-          contactName={invoice.client.contactName}
-          email={invoice.client.email}
-          phone={invoice.client.phone}
-          stateCode={invoice.client.stateCode}
-        />
-        <MetaBlock
-          label="Details"
-          pairs={[
-            ["Project", `${invoice.project.code} — ${invoice.project.name}`],
-            ["Place of supply", `State ${pos}`],
-            ["Kind", invoice.kind],
-            ["Status", invoice.status],
-            ["PO ref", invoice.poRef ?? "—"],
-            ["IRN", "—"],
+          title={invoice.client.name}
+          lines={[
+            invoice.client.billingAddress,
+            invoice.client.gstin ? `GSTIN ${invoice.client.gstin}` : null,
           ]}
         />
-      </View>
+        <InfoCol
+          label="Project"
+          accentCode={invoice.project.code}
+          title={invoice.project.name}
+          lines={projectLines}
+        />
+        <InfoCol
+          label="Invoice type"
+          title={kindLabel}
+          lines={typeLines}
+        />
+      </InfoRow>
 
-      <LineTable
+      <EditorialLineTable
         lines={invoice.lines.map((l) => ({
           description: l.description,
           hsnSac: l.hsnSac,
-          quantity: l.quantity.toString(),
+          qty: qty(l.quantity.toString()),
           unit: l.unit,
-          unitPrice: l.unitPrice.toString(),
-          discountPct: l.discountPct.toString(),
-          gstRatePct: l.gstRatePct.toString(),
-          lineSubtotal: l.lineSubtotal.toString(),
-          lineTax: l.lineTax.toString(),
-          lineTotal: l.lineTotal.toString(),
+          rate: money(l.unitPrice.toString()),
+          amount: money(l.lineTotal.toString()),
         }))}
       />
 
-      <TotalsBlock
-        subtotal={summary.subtotal.toFixed(2)}
-        cgst={summary.cgst.toFixed(2)}
-        sgst={summary.sgst.toFixed(2)}
-        igst={summary.igst.toFixed(2)}
-        taxTotal={summary.taxTotal.toFixed(2)}
-        grandTotal={summary.grandTotal.toFixed(2)}
-        intraState={intraState}
-      />
-
-      <GstSummaryTable
-        rows={summary.gstBreakdown.map((r) => ({
-          ratePct: r.ratePct,
-          taxable: r.taxable.toFixed(2),
-          cgst: r.cgst.toFixed(2),
-          sgst: r.sgst.toFixed(2),
-          igst: r.igst.toFixed(2),
-        }))}
-        intraState={intraState}
-      />
-
-      <Text style={styles.amountWords}>
-        Amount in words: {amountInWords(summary.grandTotal.toString())}
-      </Text>
-
-      <View style={{ marginTop: 12, flexDirection: "row", gap: 16 }}>
-        <View style={styles.col}>
-          <Text style={styles.sectionLabel}>Bank details</Text>
-          <View style={styles.boxed}>
-            {sabBankDetails()
-              .split(/\n+/)
-              .map((ln, i) => (
-                <Text key={i} style={styles.addressLine}>
-                  {ln}
-                </Text>
-              ))}
-          </View>
+      <View style={styles.bottomRow}>
+        <View style={styles.bottomLeft}>
+          <BankAndNotes bankLines={bankLines} notes={invoice.notes} />
         </View>
-        {invoice.termsMd && (
-          <View style={styles.col}>
-            <Text style={styles.sectionLabel}>Terms</Text>
-            <View style={styles.boxed}>
-              <Text style={styles.addressLine}>{invoice.termsMd}</Text>
-            </View>
-          </View>
-        )}
+        <View style={styles.bottomRight}>
+          <TotalsStack
+            subtotal={money(summary.subtotal.toString())}
+            cgst={money(summary.cgst.toString())}
+            sgst={money(summary.sgst.toString())}
+            igst={money(summary.igst.toString())}
+            grandTotal={money(summary.grandTotal.toString())}
+            intraState={intraState}
+            dueLabel="Total due"
+            dueSub="INR — incl. GST"
+          />
+        </View>
       </View>
 
-      {invoice.notes && (
-        <View style={styles.note}>
-          <Text style={styles.sectionLabel}>Notes</Text>
-          <Text>{invoice.notes}</Text>
-        </View>
+      <Text style={[styles.infoSub, { marginTop: 12, fontSize: 8, color: "#6B635A" }]}>
+        <Text style={{ textTransform: "uppercase", letterSpacing: 1 }}>
+          In words:{" "}
+        </Text>
+        {amountInWords(summary.grandTotal.toString())}
+      </Text>
+
+      {invoice.termsMd && (
+        <Text
+          style={[
+            styles.infoSub,
+            { marginTop: 10, fontSize: 8, color: "#6B635A" },
+          ]}
+        >
+          <Text style={{ textTransform: "uppercase", letterSpacing: 1 }}>
+            Terms:{" "}
+          </Text>
+          {invoice.termsMd}
+        </Text>
       )}
 
-      <SignatureBlock rightLabel={`For SAB India — Authorised signatory`} />
-
-      <PageFooter note={`Tax Invoice ${invoice.invoiceNo}`} />
+      <EditorialFooter
+        docLabel={`Tax Invoice ${invoice.invoiceNo}`}
+        signatoryTitle="Authorised signatory"
+      />
     </Doc>
   );
 }

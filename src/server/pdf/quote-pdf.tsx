@@ -2,19 +2,21 @@ import React from "react";
 import { Text, View } from "@react-pdf/renderer";
 import type { Client, Quote, QuoteLine } from "@prisma/client";
 import {
-  ClientBlock,
-  CompanyHeader,
+  BankAndNotes,
   Doc,
-  GstSummaryTable,
-  LineTable,
-  MetaBlock,
-  PageFooter,
-  SignatureBlock,
-  TotalsBlock,
+  EditorialFooter,
+  EditorialLineTable,
+  InfoCol,
+  InfoRow,
+  MasterHeader,
+  SubHeader,
+  TotalsStack,
+  money,
+  qty,
   styles,
 } from "./shared";
 import { summarise } from "@/lib/gst";
-import { sabStateCode } from "@/lib/org";
+import { sabBankDetails, sabStateCode } from "@/lib/org";
 import { formatIST } from "@/lib/time";
 
 type FullQuote = Quote & { client: Client; lines: QuoteLine[] };
@@ -35,98 +37,103 @@ export function QuoteDocument({ quote }: { quote: FullQuote }) {
     placeOfSupplyStateCode: pos,
   });
 
-  const title =
-    quote.status === "CONVERTED" || quote.status === "ACCEPTED"
-      ? "QUOTATION"
-      : "QUOTATION";
-
-  const meta = [
-    `#${quote.quoteNo}${quote.version > 1 ? ` (v${quote.version})` : ""}`,
-    `Issued: ${formatIST(quote.createdAt, "dd-MM-yyyy")}`,
-    quote.validUntil
-      ? `Valid until: ${formatIST(quote.validUntil, "dd-MM-yyyy")}`
-      : "",
-  ].filter(Boolean);
+  const docNo =
+    quote.version > 1 ? `${quote.quoteNo} · v${quote.version}` : quote.quoteNo;
+  const bankLines = sabBankDetails().split(/\n+/).filter(Boolean);
 
   return (
     <Doc title={`Quote ${quote.quoteNo}`}>
-      <CompanyHeader title={title} metaLines={meta} />
+      <MasterHeader docTitle="QUOTATION" docNumber={docNo} />
 
-      <View style={styles.twoCol}>
-        <ClientBlock
+      <SubHeader
+        meta={[
+          ["Issued", formatIST(quote.createdAt, "dd MMM yyyy")],
+          [
+            "Valid till",
+            quote.validUntil
+              ? formatIST(quote.validUntil, "dd MMM yyyy")
+              : "—",
+          ],
+          ["Status", quote.status],
+        ]}
+      />
+
+      <InfoRow>
+        <InfoCol
           label="Quote for"
-          name={quote.client.name}
-          gstin={quote.client.gstin}
-          address={quote.client.billingAddress}
-          contactName={quote.client.contactName}
-          email={quote.client.email}
-          phone={quote.client.phone}
-          stateCode={quote.client.stateCode}
-        />
-        <MetaBlock
-          label="Details"
-          pairs={[
-            ["Title", quote.title],
-            ["Place of supply", `State ${pos}`],
-            ["Status", quote.status],
-            ["Version", `v${quote.version}`],
+          title={quote.client.name}
+          lines={[
+            quote.client.billingAddress,
+            quote.client.gstin ? `GSTIN ${quote.client.gstin}` : null,
           ]}
         />
-      </View>
+        <InfoCol
+          label="Project"
+          title={quote.title}
+          lines={[
+            `Place of supply: state ${pos}`,
+            quote.client.contactName
+              ? `Attn: ${quote.client.contactName}`
+              : null,
+          ]}
+        />
+        <InfoCol
+          label="Revision"
+          title={`v${quote.version}`}
+          lines={[
+            `Status · ${quote.status}`,
+            quote.version > 1 ? "Supersedes prior versions" : null,
+          ]}
+        />
+      </InfoRow>
 
-      <LineTable
+      <EditorialLineTable
         lines={quote.lines.map((l) => ({
           description: l.description,
           hsnSac: l.hsnSac,
-          quantity: l.quantity.toString(),
+          qty: qty(l.quantity.toString()),
           unit: l.unit,
-          unitPrice: l.unitPrice.toString(),
-          discountPct: l.discountPct.toString(),
-          gstRatePct: l.gstRatePct.toString(),
-          lineSubtotal: l.lineSubtotal.toString(),
-          lineTax: l.lineTax.toString(),
-          lineTotal: l.lineTotal.toString(),
+          rate: money(l.unitPrice.toString()),
+          amount: money(l.lineTotal.toString()),
         }))}
       />
 
-      <TotalsBlock
-        subtotal={summary.subtotal.toFixed(2)}
-        cgst={summary.cgst.toFixed(2)}
-        sgst={summary.sgst.toFixed(2)}
-        igst={summary.igst.toFixed(2)}
-        taxTotal={summary.taxTotal.toFixed(2)}
-        grandTotal={summary.grandTotal.toFixed(2)}
-        intraState={intraState}
-      />
-
-      <GstSummaryTable
-        rows={summary.gstBreakdown.map((r) => ({
-          ratePct: r.ratePct,
-          taxable: r.taxable.toFixed(2),
-          cgst: r.cgst.toFixed(2),
-          sgst: r.sgst.toFixed(2),
-          igst: r.igst.toFixed(2),
-        }))}
-        intraState={intraState}
-      />
-
-      {quote.notes && (
-        <View style={styles.note}>
-          <Text style={styles.sectionLabel}>Notes</Text>
-          <Text>{quote.notes}</Text>
+      <View style={styles.bottomRow}>
+        <View style={styles.bottomLeft}>
+          <BankAndNotes bankLines={bankLines} notes={quote.notes} />
         </View>
-      )}
+        <View style={styles.bottomRight}>
+          <TotalsStack
+            subtotal={money(summary.subtotal.toString())}
+            cgst={money(summary.cgst.toString())}
+            sgst={money(summary.sgst.toString())}
+            igst={money(summary.igst.toString())}
+            grandTotal={money(summary.grandTotal.toString())}
+            intraState={intraState}
+            dueLabel="Quoted total"
+            dueSub="INR — incl. GST"
+          />
+        </View>
+      </View>
 
       {quote.termsMd && (
-        <View style={styles.note}>
-          <Text style={styles.sectionLabel}>Terms &amp; conditions</Text>
-          <Text>{quote.termsMd}</Text>
-        </View>
+        <Text
+          style={[
+            styles.infoSub,
+            { marginTop: 12, fontSize: 8, color: "#6B635A" },
+          ]}
+        >
+          <Text style={{ textTransform: "uppercase", letterSpacing: 1 }}>
+            Terms &amp; conditions:{" "}
+          </Text>
+          {quote.termsMd}
+        </Text>
       )}
 
-      <SignatureBlock />
-
-      <PageFooter note={`Quote ${quote.quoteNo}`} />
+      <EditorialFooter
+        docLabel={`Quote ${quote.quoteNo}`}
+        signatoryTitle="For SAB India"
+      />
     </Doc>
   );
 }

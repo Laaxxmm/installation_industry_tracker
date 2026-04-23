@@ -5,405 +5,506 @@ import {
   StyleSheet,
   Text,
   View,
-  Font,
 } from "@react-pdf/renderer";
 import { sabAddress, sabCompanyName, sabGstin } from "@/lib/org";
+import { inr } from "@/components/sab/format";
 
-// Single font registration guard (Font.register runs once per process).
+// Warm-paper editorial palette — sRGB approximations of the oklch() tokens
+// used in the web UI (oklch() is not supported by react-pdf).
+const PAPER = "#FAF8F2";
+const INK = "#3A3530";
+const INK2 = "#6B635A";
+const INK3 = "#958C7F";
+const RULE = "#E6E1D5";
+const RULE_STRONG = "#D3CCBC";
+const ACCENT = "#D2783F"; // SAB orange
+const ACCENT_INK = "#A8532A";
+const ACCENT_WASH = "#FAE9DD";
+
+// react-pdf Font.register is not needed — Helvetica + Courier ship with pdfkit.
 let fontsRegistered = false;
 export function ensureFonts() {
   if (fontsRegistered) return;
-  // Use the default Helvetica family — no external fetch required.
   fontsRegistered = true;
 }
 
-const BRAND = "#0B5CAD";
-const BORDER = "#CBD5E1";
-const TEXT = "#0F172A";
-const MUTED = "#64748B";
-const SOFT = "#F1F5F9";
+/* =========================================================================
+ *  Stylesheet
+ * ========================================================================= */
 
 export const styles = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
-    fontSize: 10,
-    color: TEXT,
-    paddingHorizontal: 36,
-    paddingTop: 36,
-    paddingBottom: 60,
+    fontSize: 9.5,
+    color: INK,
+    backgroundColor: PAPER,
+    paddingHorizontal: 40,
+    paddingTop: 32,
+    paddingBottom: 64,
+    lineHeight: 1.35,
   },
-  headerBar: {
+
+  // ---------- Master header: brand left, doc title + no. right ----------
+  masterHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    borderBottomWidth: 2,
-    borderBottomColor: BRAND,
-    paddingBottom: 10,
-    marginBottom: 14,
+    marginBottom: 18,
   },
-  logoBlock: { flexDirection: "column" },
-  logoMark: {
-    width: 36,
-    height: 36,
-    backgroundColor: BRAND,
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  brandTile: {
+    width: 22,
+    height: 22,
+    backgroundColor: ACCENT,
     color: "white",
     textAlign: "center",
+    fontSize: 9,
     fontWeight: "bold",
-    fontSize: 18,
-    paddingTop: 7,
-    marginBottom: 6,
-  },
-  companyName: { fontSize: 14, fontWeight: "bold", color: BRAND },
-  companyLine: { fontSize: 9, color: MUTED, marginTop: 2 },
-  docTitle: { fontSize: 20, fontWeight: "bold", color: BRAND, textAlign: "right" },
-  docMeta: { fontSize: 9, color: MUTED, textAlign: "right", marginTop: 4 },
-  twoCol: { flexDirection: "row", gap: 16, marginBottom: 14 },
-  col: { flex: 1 },
-  sectionLabel: {
-    fontSize: 8,
-    fontWeight: "bold",
-    textTransform: "uppercase",
+    paddingTop: 5,
     letterSpacing: 0.6,
-    color: MUTED,
-    marginBottom: 4,
   },
-  boxed: {
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 8,
-    borderRadius: 3,
+  brandWordmark: { fontSize: 13, fontWeight: "bold", color: INK },
+  brandSubtitle: {
+    fontSize: 7.5,
+    color: INK3,
+    marginTop: 1,
+    fontStyle: "italic",
   },
-  clientName: { fontSize: 11, fontWeight: "bold" },
-  addressLine: { fontSize: 9, color: TEXT, marginTop: 2, lineHeight: 1.3 },
-  mono: { fontFamily: "Courier", fontSize: 9 },
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: SOFT,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: BORDER,
-    paddingVertical: 5,
-    paddingHorizontal: 4,
-  },
-  tableHeaderCell: {
+  docEyebrow: {
     fontSize: 8,
-    fontWeight: "bold",
+    color: INK3,
+    textAlign: "right",
     textTransform: "uppercase",
-    color: MUTED,
+    letterSpacing: 1.4,
+  },
+  docNumber: {
+    fontFamily: "Courier",
+    fontSize: 18,
+    color: INK,
+    textAlign: "right",
+    marginTop: 3,
     letterSpacing: 0.4,
+  },
+
+  // Thin horizontal separator used throughout
+  hr: {
+    borderBottomWidth: 0.6,
+    borderBottomColor: RULE_STRONG,
+    marginVertical: 10,
+  },
+  hrSoft: {
+    borderBottomWidth: 0.4,
+    borderBottomColor: RULE,
+    marginVertical: 8,
+  },
+
+  // ---------- Sub-header: address left, meta right ----------
+  subHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  addressBlock: { width: "60%" },
+  addressLine: {
+    fontFamily: "Courier",
+    fontSize: 8,
+    color: INK2,
+    lineHeight: 1.45,
+  },
+  addressLead: {
+    fontSize: 9.5,
+    fontWeight: "bold",
+    color: INK,
+    marginBottom: 2,
+  },
+  metaBlock: { width: "38%" },
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 1,
+  },
+  metaKey: {
+    fontFamily: "Courier",
+    fontSize: 8,
+    color: INK3,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  metaVal: {
+    fontFamily: "Courier",
+    fontSize: 9,
+    color: INK,
+  },
+
+  // ---------- Three-column info row (Bill to / Project / Invoice type) ----------
+  infoRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  infoCol: {
+    flex: 1,
+    borderTopWidth: 0.8,
+    borderTopColor: INK,
+    paddingTop: 6,
+  },
+  infoLabel: {
+    fontSize: 7,
+    color: INK3,
+    textTransform: "uppercase",
+    letterSpacing: 1.4,
+    marginBottom: 5,
+  },
+  infoTitle: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: INK,
+    marginBottom: 2,
+  },
+  infoSub: { fontSize: 8.5, color: INK2, lineHeight: 1.4 },
+  infoSubMono: {
+    fontFamily: "Courier",
+    fontSize: 8,
+    color: INK3,
+    marginTop: 1,
+  },
+  infoAccent: {
+    fontFamily: "Courier",
+    fontSize: 9,
+    color: ACCENT_INK,
+    letterSpacing: 0.3,
+  },
+
+  // ---------- Line-item table ----------
+  tableHead: {
+    flexDirection: "row",
+    borderTopWidth: 0.8,
+    borderBottomWidth: 0.4,
+    borderColor: INK,
+    paddingVertical: 5,
+    paddingHorizontal: 2,
+    marginTop: 2,
+  },
+  tableHeadCell: {
+    fontSize: 7,
+    color: INK3,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   tableRow: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    borderBottomWidth: 0.3,
+    borderBottomColor: RULE,
+    paddingVertical: 7,
+    paddingHorizontal: 2,
   },
-  tableCell: { fontSize: 9 },
-  right: { textAlign: "right" },
-  totalsBlock: {
-    alignSelf: "flex-end",
-    width: 260,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 8,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 2,
-    fontSize: 10,
-  },
-  totalGrandRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingTop: 4,
-    marginTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-    fontSize: 12,
-    fontWeight: "bold",
-    color: BRAND,
-  },
-  amountWords: {
-    marginTop: 10,
+  tableCell: { fontSize: 9, color: INK },
+  tableCellMono: {
+    fontFamily: "Courier",
     fontSize: 9,
-    fontStyle: "italic",
-    color: TEXT,
+    color: INK,
   },
-  note: { fontSize: 9, color: TEXT, marginTop: 10, lineHeight: 1.4 },
+  tableCellMonoMuted: {
+    fontFamily: "Courier",
+    fontSize: 8.5,
+    color: INK3,
+  },
+  right: { textAlign: "right" },
+
+  // ---------- Bottom split: bank/notes left, totals right ----------
+  bottomRow: {
+    flexDirection: "row",
+    gap: 20,
+    marginTop: 16,
+  },
+  bottomLeft: { flex: 1 },
+  bottomRight: { width: 210 },
+
+  sectionCaps: {
+    fontSize: 7,
+    color: INK3,
+    textTransform: "uppercase",
+    letterSpacing: 1.4,
+    marginBottom: 4,
+  },
+  totalLine: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 3,
+  },
+  totalKey: { fontSize: 9, color: INK2 },
+  totalVal: {
+    fontFamily: "Courier",
+    fontSize: 9.5,
+    color: INK,
+  },
+  totalDueBox: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    marginTop: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    backgroundColor: ACCENT_WASH,
+    borderLeftWidth: 2,
+    borderLeftColor: ACCENT,
+  },
+  totalDueLabel: {
+    fontSize: 9,
+    fontWeight: "bold",
+    color: ACCENT_INK,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  totalDueSub: {
+    fontSize: 7,
+    color: INK3,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginTop: 1,
+  },
+  totalDueVal: {
+    fontFamily: "Courier",
+    fontSize: 15,
+    fontWeight: "bold",
+    color: ACCENT_INK,
+  },
+
+  // ---------- Footer ----------
   footer: {
     position: "absolute",
-    bottom: 24,
-    left: 36,
-    right: 36,
-    fontSize: 8,
-    color: MUTED,
-    textAlign: "center",
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-    paddingTop: 6,
-  },
-  signBlock: {
-    marginTop: 30,
+    bottom: 26,
+    left: 40,
+    right: 40,
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "flex-end",
+    borderTopWidth: 0.4,
+    borderTopColor: RULE,
+    paddingTop: 8,
   },
-  signBox: {
-    width: 220,
+  footerLeft: {
+    fontFamily: "Courier",
+    fontSize: 7.5,
+    color: INK3,
+  },
+  footerRight: {
+    width: 160,
+    textAlign: "right",
   },
   signLine: {
-    borderTopWidth: 1,
-    borderTopColor: TEXT,
-    marginTop: 40,
-    paddingTop: 4,
     fontSize: 9,
-    color: MUTED,
-    textAlign: "center",
+    color: INK,
+    fontStyle: "italic",
+    textAlign: "right",
+    marginBottom: 2,
+  },
+  signCaption: {
+    fontFamily: "Courier",
+    fontSize: 7.5,
+    color: INK3,
+    textAlign: "right",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 });
 
-export function CompanyHeader({
-  title,
-  metaLines = [],
-}: {
-  title: string;
-  metaLines?: string[];
-}) {
-  const name = sabCompanyName();
-  const address = sabAddress();
-  const gstin = sabGstin();
-  const initials = name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+/* =========================================================================
+ *  Primitives
+ * ========================================================================= */
 
+/** Warm-paper master header: brand tile+wordmark left, doc title+no. right. */
+export function MasterHeader({
+  docTitle,
+  docNumber,
+}: {
+  docTitle: string;
+  docNumber: string;
+}) {
   return (
-    <View style={styles.headerBar}>
-      <View style={styles.logoBlock}>
-        <Text style={styles.logoMark}>{initials || "S"}</Text>
-        <Text style={styles.companyName}>{name}</Text>
-        {address.split(/\n+/).map((ln, i) => (
-          <Text key={i} style={styles.companyLine}>
-            {ln}
-          </Text>
-        ))}
-        <Text style={[styles.companyLine, styles.mono]}>GSTIN: {gstin}</Text>
+    <View style={styles.masterHeader}>
+      <View style={styles.brandRow}>
+        <Text style={styles.brandTile}>S</Text>
+        <View>
+          <Text style={styles.brandWordmark}>SAB India Tracker</Text>
+          <Text style={styles.brandSubtitle}>Powered by indefine</Text>
+        </View>
       </View>
       <View>
-        <Text style={styles.docTitle}>{title}</Text>
-        {metaLines.map((m, i) => (
-          <Text key={i} style={styles.docMeta}>
-            {m}
-          </Text>
-        ))}
+        <Text style={styles.docEyebrow}>{docTitle}</Text>
+        <Text style={styles.docNumber}>{docNumber}</Text>
       </View>
     </View>
   );
 }
 
-export function ClientBlock({
-  label = "Bill To",
-  name,
-  gstin,
-  address,
-  contactName,
-  email,
-  phone,
-  stateCode,
+/**
+ * Sub-header: company address lines on the left, a small meta table (Issued
+ * / Due / Terms-style pairs) on the right.
+ */
+export function SubHeader({
+  meta,
 }: {
-  label?: string;
-  name: string;
-  gstin?: string | null;
-  address: string;
-  contactName?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  stateCode?: string;
+  meta: Array<[string, string | null | undefined]>;
 }) {
+  const name = sabCompanyName();
+  const addressLines = sabAddress().split(/\n+/).filter(Boolean);
+  const gstin = sabGstin();
   return (
-    <View style={styles.col}>
-      <Text style={styles.sectionLabel}>{label}</Text>
-      <View style={styles.boxed}>
-        <Text style={styles.clientName}>{name}</Text>
-        {gstin && (
-          <Text style={[styles.addressLine, styles.mono]}>GSTIN: {gstin}</Text>
-        )}
-        {address.split(/\n+/).map((ln, i) => (
+    <View style={styles.subHeader}>
+      <View style={styles.addressBlock}>
+        <Text style={styles.addressLead}>{name}</Text>
+        {addressLines.map((ln, i) => (
           <Text key={i} style={styles.addressLine}>
             {ln}
           </Text>
         ))}
-        {stateCode && (
-          <Text style={styles.addressLine}>State code: {stateCode}</Text>
-        )}
-        {contactName && (
-          <Text style={styles.addressLine}>Contact: {contactName}</Text>
-        )}
-        {email && <Text style={styles.addressLine}>{email}</Text>}
-        {phone && <Text style={styles.addressLine}>{phone}</Text>}
+        <Text style={styles.addressLine}>GSTIN {gstin}</Text>
+      </View>
+      <View style={styles.metaBlock}>
+        {meta
+          .filter(([, v]) => v !== null && v !== undefined && v !== "")
+          .map(([k, v], i) => (
+            <View key={i} style={styles.metaRow}>
+              <Text style={styles.metaKey}>{k}</Text>
+              <Text style={styles.metaVal}>{v}</Text>
+            </View>
+          ))}
       </View>
     </View>
   );
 }
 
-export function MetaBlock({
+/**
+ * One cell of the three-column info strip (Bill to / Project / Invoice type).
+ * Accepts a title + optional subtitle lines + optional mono-accent code.
+ */
+export function InfoCol({
   label,
-  pairs,
+  accentCode,
+  title,
+  subtitle,
+  lines = [],
 }: {
   label: string;
-  pairs: Array<[string, string | undefined | null]>;
+  accentCode?: string;
+  title?: string;
+  subtitle?: string;
+  lines?: Array<string | null | undefined>;
 }) {
   return (
-    <View style={styles.col}>
-      <Text style={styles.sectionLabel}>{label}</Text>
-      <View style={styles.boxed}>
-        {pairs.map(([k, v], i) => (
-          <View
-            key={i}
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              paddingVertical: 2,
-            }}
-          >
-            <Text style={{ fontSize: 9, color: MUTED }}>{k}</Text>
-            <Text style={{ fontSize: 9, fontWeight: "bold" }}>{v ?? "—"}</Text>
-          </View>
+    <View style={styles.infoCol}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      {accentCode && <Text style={styles.infoAccent}>{accentCode}</Text>}
+      {title && <Text style={styles.infoTitle}>{title}</Text>}
+      {subtitle && <Text style={styles.infoSub}>{subtitle}</Text>}
+      {lines
+        .filter((l): l is string => !!l)
+        .map((ln, i) => (
+          <Text key={i} style={styles.infoSub}>
+            {ln}
+          </Text>
         ))}
-      </View>
     </View>
   );
 }
 
-export function LineTable({
+export function InfoRow({ children }: { children: React.ReactNode }) {
+  return <View style={styles.infoRow}>{children}</View>;
+}
+
+/**
+ * Six-column line-item table: #, description, qty, unit, rate, amount.
+ * Values pre-formatted with Indian grouping (₹5,78,400) by the caller.
+ */
+export function EditorialLineTable({
   lines,
-  showGst = true,
 }: {
   lines: Array<{
     description: string;
     hsnSac?: string | null;
-    quantity: string;
+    qty: string;
     unit: string;
-    unitPrice: string;
-    discountPct: string;
-    gstRatePct?: string;
-    lineSubtotal: string;
-    lineTax: string;
-    lineTotal: string;
+    rate: string;
+    amount: string;
   }>;
-  showGst?: boolean;
 }) {
   const col = {
-    num: 22,
-    desc: showGst ? 170 : 200,
-    hsn: 42,
+    num: 26,
+    desc: "1 1 auto" as unknown as number,
     qty: 36,
-    unit: 30,
-    price: 52,
-    disc: 30,
-    gst: 28,
-    taxable: 55,
-    tax: 48,
-    total: 58,
+    unit: 36,
+    rate: 70,
+    amount: 74,
   };
   return (
     <View>
-      <View style={styles.tableHeader}>
-        <Text style={[styles.tableHeaderCell, { width: col.num }]}>#</Text>
-        <Text style={[styles.tableHeaderCell, { width: col.desc }]}>
+      <View style={styles.tableHead}>
+        <Text style={[styles.tableHeadCell, { width: col.num }]}>#</Text>
+        <Text style={[styles.tableHeadCell, { flexGrow: 1, flexShrink: 1 }]}>
           Description
         </Text>
-        <Text style={[styles.tableHeaderCell, { width: col.hsn }]}>HSN</Text>
-        <Text style={[styles.tableHeaderCell, styles.right, { width: col.qty }]}>
+        <Text
+          style={[styles.tableHeadCell, styles.right, { width: col.qty }]}
+        >
           Qty
         </Text>
-        <Text style={[styles.tableHeaderCell, { width: col.unit }]}>Unit</Text>
         <Text
-          style={[styles.tableHeaderCell, styles.right, { width: col.price }]}
+          style={[styles.tableHeadCell, styles.right, { width: col.unit }]}
         >
-          Price
+          Unit
         </Text>
         <Text
-          style={[styles.tableHeaderCell, styles.right, { width: col.disc }]}
+          style={[styles.tableHeadCell, styles.right, { width: col.rate }]}
         >
-          Disc%
-        </Text>
-        {showGst && (
-          <Text
-            style={[styles.tableHeaderCell, styles.right, { width: col.gst }]}
-          >
-            GST%
-          </Text>
-        )}
-        <Text
-          style={[styles.tableHeaderCell, styles.right, { width: col.taxable }]}
-        >
-          Taxable
-        </Text>
-        <Text style={[styles.tableHeaderCell, styles.right, { width: col.tax }]}>
-          Tax
+          Rate
         </Text>
         <Text
-          style={[styles.tableHeaderCell, styles.right, { width: col.total }]}
+          style={[styles.tableHeadCell, styles.right, { width: col.amount }]}
         >
-          Total
+          Amount
         </Text>
       </View>
       {lines.map((l, i) => (
         <View key={i} style={styles.tableRow} wrap={false}>
-          <Text style={[styles.tableCell, { width: col.num, color: MUTED }]}>
-            {i + 1}
+          <Text
+            style={[styles.tableCellMonoMuted, { width: col.num }]}
+          >
+            {String(i + 1).padStart(2, "0")}
           </Text>
-          <Text style={[styles.tableCell, { width: col.desc }]}>
-            {l.description}
+          <View style={{ flexGrow: 1, flexShrink: 1, paddingRight: 6 }}>
+            <Text style={styles.tableCell}>{l.description}</Text>
+            {l.hsnSac && (
+              <Text style={[styles.tableCellMonoMuted, { marginTop: 1 }]}>
+                HSN {l.hsnSac}
+              </Text>
+            )}
+          </View>
+          <Text
+            style={[styles.tableCellMono, styles.right, { width: col.qty }]}
+          >
+            {l.qty}
           </Text>
           <Text
-            style={[styles.tableCell, styles.mono, { width: col.hsn }]}
+            style={[styles.tableCellMonoMuted, styles.right, { width: col.unit }]}
           >
-            {l.hsnSac ?? "—"}
-          </Text>
-          <Text style={[styles.tableCell, styles.right, { width: col.qty }]}>
-            {l.quantity}
-          </Text>
-          <Text style={[styles.tableCell, { width: col.unit }]}>{l.unit}</Text>
-          <Text
-            style={[styles.tableCell, styles.right, { width: col.price }]}
-          >
-            {l.unitPrice}
+            {l.unit}
           </Text>
           <Text
-            style={[styles.tableCell, styles.right, { width: col.disc }]}
+            style={[styles.tableCellMono, styles.right, { width: col.rate }]}
           >
-            {l.discountPct}
-          </Text>
-          {showGst && (
-            <Text
-              style={[styles.tableCell, styles.right, { width: col.gst }]}
-            >
-              {l.gstRatePct ?? "0"}
-            </Text>
-          )}
-          <Text
-            style={[styles.tableCell, styles.right, { width: col.taxable }]}
-          >
-            {l.lineSubtotal}
-          </Text>
-          <Text style={[styles.tableCell, styles.right, { width: col.tax }]}>
-            {l.lineTax}
+            {l.rate}
           </Text>
           <Text
             style={[
-              styles.tableCell,
+              styles.tableCellMono,
               styles.right,
-              { width: col.total, fontWeight: "bold" },
+              { width: col.amount, fontWeight: "bold" },
             ]}
           >
-            {l.lineTotal}
+            {l.amount}
           </Text>
         </View>
       ))}
@@ -411,152 +512,132 @@ export function LineTable({
   );
 }
 
-export function GstSummaryTable({
-  rows,
-  intraState,
-}: {
-  rows: Array<{
-    ratePct: string;
-    taxable: string;
-    cgst: string;
-    sgst: string;
-    igst: string;
-  }>;
-  intraState: boolean;
-}) {
-  return (
-    <View style={{ marginTop: 10 }}>
-      <Text style={styles.sectionLabel}>GST breakdown</Text>
-      <View style={styles.tableHeader}>
-        <Text style={[styles.tableHeaderCell, { width: 50 }]}>Rate</Text>
-        <Text style={[styles.tableHeaderCell, styles.right, { width: 80 }]}>
-          Taxable
-        </Text>
-        {intraState ? (
-          <>
-            <Text style={[styles.tableHeaderCell, styles.right, { width: 70 }]}>
-              CGST
-            </Text>
-            <Text style={[styles.tableHeaderCell, styles.right, { width: 70 }]}>
-              SGST
-            </Text>
-          </>
-        ) : (
-          <Text style={[styles.tableHeaderCell, styles.right, { width: 70 }]}>
-            IGST
-          </Text>
-        )}
-      </View>
-      {rows.map((r, i) => (
-        <View key={i} style={styles.tableRow} wrap={false}>
-          <Text style={[styles.tableCell, { width: 50 }]}>{r.ratePct}%</Text>
-          <Text style={[styles.tableCell, styles.right, { width: 80 }]}>
-            {r.taxable}
-          </Text>
-          {intraState ? (
-            <>
-              <Text style={[styles.tableCell, styles.right, { width: 70 }]}>
-                {r.cgst}
-              </Text>
-              <Text style={[styles.tableCell, styles.right, { width: 70 }]}>
-                {r.sgst}
-              </Text>
-            </>
-          ) : (
-            <Text style={[styles.tableCell, styles.right, { width: 70 }]}>
-              {r.igst}
-            </Text>
-          )}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-export function TotalsBlock({
+/** Totals stack right column: subtotal, CGST/SGST or IGST, tax total, then
+ *  a warm accent-washed TOTAL DUE row. */
+export function TotalsStack({
   subtotal,
   cgst,
   sgst,
   igst,
-  taxTotal,
   grandTotal,
   intraState,
+  dueLabel = "Total due",
+  dueSub = "INR — incl. GST",
 }: {
   subtotal: string;
   cgst?: string;
   sgst?: string;
   igst?: string;
-  taxTotal: string;
   grandTotal: string;
   intraState: boolean;
+  dueLabel?: string;
+  dueSub?: string;
 }) {
   return (
-    <View style={styles.totalsBlock}>
-      <View style={styles.totalRow}>
-        <Text>Subtotal</Text>
-        <Text>{subtotal}</Text>
+    <View>
+      <View style={styles.totalLine}>
+        <Text style={styles.totalKey}>Subtotal</Text>
+        <Text style={styles.totalVal}>{subtotal}</Text>
       </View>
       {intraState ? (
         <>
-          <View style={styles.totalRow}>
-            <Text>CGST</Text>
-            <Text>{cgst ?? "0.00"}</Text>
+          <View style={styles.totalLine}>
+            <Text style={styles.totalKey}>CGST @ 9%</Text>
+            <Text style={styles.totalVal}>{cgst ?? "—"}</Text>
           </View>
-          <View style={styles.totalRow}>
-            <Text>SGST</Text>
-            <Text>{sgst ?? "0.00"}</Text>
+          <View style={styles.totalLine}>
+            <Text style={styles.totalKey}>SGST @ 9%</Text>
+            <Text style={styles.totalVal}>{sgst ?? "—"}</Text>
           </View>
         </>
       ) : (
-        <View style={styles.totalRow}>
-          <Text>IGST</Text>
-          <Text>{igst ?? "0.00"}</Text>
+        <View style={styles.totalLine}>
+          <Text style={styles.totalKey}>IGST @ 18%</Text>
+          <Text style={styles.totalVal}>{igst ?? "—"}</Text>
         </View>
       )}
-      <View style={styles.totalRow}>
-        <Text>Tax total</Text>
-        <Text>{taxTotal}</Text>
-      </View>
-      <View style={styles.totalGrandRow}>
-        <Text>Grand total</Text>
-        <Text>{grandTotal}</Text>
+      <View style={styles.totalDueBox}>
+        <View>
+          <Text style={styles.totalDueLabel}>{dueLabel}</Text>
+          <Text style={styles.totalDueSub}>{dueSub}</Text>
+        </View>
+        <Text style={styles.totalDueVal}>{grandTotal}</Text>
       </View>
     </View>
   );
 }
 
-export function SignatureBlock({
-  leftLabel = "For and on behalf of the Client",
-  rightLabel,
+/** Bank details + optional notes block (bottom-left of most docs). */
+export function BankAndNotes({
+  bankLines,
+  notes,
 }: {
-  leftLabel?: string;
-  rightLabel?: string;
+  bankLines: string[];
+  notes?: string | null;
 }) {
-  const right = rightLabel ?? `For ${sabCompanyName()}`;
   return (
-    <View style={styles.signBlock}>
-      <View style={styles.signBox}>
-        <Text style={styles.signLine}>{leftLabel}</Text>
-      </View>
-      <View style={styles.signBox}>
-        <Text style={styles.signLine}>{right}</Text>
+    <View>
+      <Text style={styles.sectionCaps}>Bank details</Text>
+      {bankLines.map((ln, i) => (
+        <Text key={i} style={styles.addressLine}>
+          {ln}
+        </Text>
+      ))}
+      {notes && (
+        <View style={{ marginTop: 10 }}>
+          <Text style={styles.sectionCaps}>Notes</Text>
+          <Text style={[styles.infoSub, { fontSize: 8.5 }]}>{notes}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** A labelled block (terms, notes, etc.) used below totals if needed. */
+export function LabelledBlock({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ marginTop: 12 }}>
+      <Text style={styles.sectionCaps}>{label}</Text>
+      <Text style={styles.infoSub}>{children}</Text>
+    </View>
+  );
+}
+
+/** Page footer: generated-by line on the left, signature on the right. */
+export function EditorialFooter({
+  docLabel,
+  signatoryName,
+  signatoryTitle = "Authorised signatory",
+}: {
+  docLabel: string;
+  signatoryName?: string | null;
+  signatoryTitle?: string;
+}) {
+  return (
+    <View style={styles.footer} fixed>
+      <Text
+        style={styles.footerLeft}
+        render={({ pageNumber, totalPages }) =>
+          `Generated by SAB Tracker  ·  Powered by indefine  ·  ${docLabel}  ·  Page ${pageNumber} of ${totalPages}`
+        }
+      />
+      <View style={styles.footerRight}>
+        {signatoryName && (
+          <Text style={styles.signLine}>{signatoryName}</Text>
+        )}
+        <Text style={styles.signCaption}>{signatoryTitle}</Text>
       </View>
     </View>
   );
 }
 
-export function PageFooter({ note }: { note?: string }) {
-  return (
-    <Text
-      style={styles.footer}
-      render={({ pageNumber, totalPages }) =>
-        `${note ? note + "  ·  " : ""}Page ${pageNumber} of ${totalPages}`
-      }
-      fixed
-    />
-  );
-}
-
+/** Document wrapper. */
 export function Doc({
   children,
   title,
@@ -572,4 +653,25 @@ export function Doc({
       </Page>
     </Document>
   );
+}
+
+/* =========================================================================
+ *  Money formatter for PDF values (Indian grouping, 2dp, leading ₹).
+ * ========================================================================= */
+
+export function money(v: string | number): string {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return inr(n, { compact: false });
+}
+
+export function qty(v: string | number): string {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  // Keep trailing zero-decimal compact: 12 not 12.00, but 1.5 not 1
+  return Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString("en-IN", { maximumFractionDigits: 3 });
 }

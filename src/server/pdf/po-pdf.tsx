@@ -2,18 +2,21 @@ import React from "react";
 import { Text, View } from "@react-pdf/renderer";
 import type { PurchaseOrder } from "@prisma/client";
 import {
-  ClientBlock,
-  CompanyHeader,
+  BankAndNotes,
   Doc,
-  LineTable,
-  MetaBlock,
-  PageFooter,
-  SignatureBlock,
-  TotalsBlock,
+  EditorialFooter,
+  EditorialLineTable,
+  InfoCol,
+  InfoRow,
+  MasterHeader,
+  SubHeader,
+  TotalsStack,
+  money,
+  qty,
   styles,
 } from "./shared";
 import { formatIST } from "@/lib/time";
-import { sabStateCode } from "@/lib/org";
+import { sabBankDetails, sabStateCode } from "@/lib/org";
 
 type SnapshotShape = {
   quote: {
@@ -66,79 +69,106 @@ export function PurchaseOrderDocument({
   const pos = snapshot.quote.placeOfSupplyStateCode;
   const intraState = supplier === pos;
 
-  // Reconstruct CGST/SGST/IGST split from snapshot tax (groupings aren't stored;
-  // we present aggregate totals only on the WO).
-  const taxTotal = snapshot.quote.taxTotal;
-  const half = (Number(taxTotal) / 2).toFixed(2);
+  const taxTotal = Number(snapshot.quote.taxTotal);
+  const half = (taxTotal / 2).toFixed(2);
+
+  const bankLines = sabBankDetails().split(/\n+/).filter(Boolean);
+
+  // Project column: dates + source quote
+  const projectLines: string[] = [
+    `Planned: ${formatIST(po.plannedStart, "dd MMM")} – ${formatIST(po.plannedEnd, "dd MMM yyyy")}`,
+    `Source: quote ${snapshot.quote.quoteNo} v${snapshot.quote.version}`,
+  ];
+
+  const clientPoLines: Array<string | null> = [
+    po.clientPoNumber ? `Client PO: ${po.clientPoNumber}` : null,
+    po.clientPoDate ? `Dated: ${formatIST(po.clientPoDate, "dd MMM yyyy")}` : null,
+    po.signedAt
+      ? `Signed: ${formatIST(po.signedAt, "dd MMM yyyy")}`
+      : "Awaiting client signature",
+  ];
 
   return (
     <Doc title={`Work Order ${po.poNo}`}>
-      <CompanyHeader
-        title="WORK ORDER"
-        metaLines={[
-          `#${po.poNo}`,
-          `Issued: ${formatIST(po.issuedAt, "dd-MM-yyyy")}`,
-          `Project: ${projectCode}`,
+      <MasterHeader docTitle="WORK ORDER" docNumber={po.poNo} />
+
+      <SubHeader
+        meta={[
+          ["Issued", formatIST(po.issuedAt, "dd MMM yyyy")],
+          ["Project", projectCode],
+          ["Quote", `${snapshot.quote.quoteNo} v${snapshot.quote.version}`],
         ]}
       />
 
-      <View style={styles.twoCol}>
-        <ClientBlock
+      <InfoRow>
+        <InfoCol
           label="Client"
-          name={snapshot.client.name}
-          gstin={snapshot.client.gstin}
-          address={snapshot.client.billingAddress}
-          contactName={snapshot.client.contactName}
-          email={snapshot.client.email}
-          phone={snapshot.client.phone}
-          stateCode={snapshot.client.stateCode}
-        />
-        <MetaBlock
-          label="Project"
-          pairs={[
-            ["Name", projectName],
-            ["Code", projectCode],
-            ["Planned start", formatIST(po.plannedStart, "dd-MM-yyyy")],
-            ["Planned end", formatIST(po.plannedEnd, "dd-MM-yyyy")],
-            ["Source quote", `${snapshot.quote.quoteNo} v${snapshot.quote.version}`],
-            ["Client PO #", po.clientPoNumber ?? "—"],
-            [
-              "Client PO date",
-              po.clientPoDate ? formatIST(po.clientPoDate, "dd-MM-yyyy") : "—",
-            ],
+          title={snapshot.client.name}
+          lines={[
+            snapshot.client.billingAddress,
+            snapshot.client.gstin ? `GSTIN ${snapshot.client.gstin}` : null,
           ]}
         />
+        <InfoCol
+          label="Project"
+          accentCode={projectCode}
+          title={projectName}
+          lines={projectLines}
+        />
+        <InfoCol
+          label="Authorisation"
+          title={snapshot.quote.title}
+          lines={clientPoLines}
+        />
+      </InfoRow>
+
+      <EditorialLineTable
+        lines={snapshot.lines.map((l) => ({
+          description: l.description,
+          hsnSac: l.hsnSac,
+          qty: qty(l.quantity),
+          unit: l.unit,
+          rate: money(l.unitPrice),
+          amount: money(l.lineTotal),
+        }))}
+      />
+
+      <View style={styles.bottomRow}>
+        <View style={styles.bottomLeft}>
+          <BankAndNotes bankLines={bankLines} notes={snapshot.quote.notes} />
+        </View>
+        <View style={styles.bottomRight}>
+          <TotalsStack
+            subtotal={money(snapshot.quote.subtotal)}
+            cgst={intraState ? money(half) : undefined}
+            sgst={intraState ? money(half) : undefined}
+            igst={!intraState ? money(taxTotal) : undefined}
+            grandTotal={money(snapshot.quote.grandTotal)}
+            intraState={intraState}
+            dueLabel="Work order value"
+            dueSub="INR — incl. GST"
+          />
+        </View>
       </View>
 
-      <LineTable lines={snapshot.lines} />
-
-      <TotalsBlock
-        subtotal={snapshot.quote.subtotal}
-        cgst={intraState ? half : undefined}
-        sgst={intraState ? half : undefined}
-        igst={!intraState ? taxTotal : undefined}
-        taxTotal={taxTotal}
-        grandTotal={snapshot.quote.grandTotal}
-        intraState={intraState}
-      />
-
       {snapshot.quote.termsMd && (
-        <View style={styles.note}>
-          <Text style={styles.sectionLabel}>Terms &amp; conditions</Text>
-          <Text>{snapshot.quote.termsMd}</Text>
-        </View>
+        <Text
+          style={[
+            styles.infoSub,
+            { marginTop: 12, fontSize: 8, color: "#6B635A" },
+          ]}
+        >
+          <Text style={{ textTransform: "uppercase", letterSpacing: 1 }}>
+            Terms &amp; conditions:{" "}
+          </Text>
+          {snapshot.quote.termsMd}
+        </Text>
       )}
 
-      <SignatureBlock
-        leftLabel="Signed by client"
-        rightLabel={
-          po.signedAt
-            ? `Signed on ${formatIST(po.signedAt)}`
-            : "For and on behalf of SAB India"
-        }
+      <EditorialFooter
+        docLabel={`Work Order ${po.poNo}`}
+        signatoryTitle={po.signedAt ? "Signed" : "For SAB India"}
       />
-
-      <PageFooter note={`Work Order ${po.poNo}`} />
     </Doc>
   );
 }
