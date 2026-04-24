@@ -12,6 +12,7 @@ import { formatINR, sum } from "@/lib/money";
 import { formatIST } from "@/lib/time";
 import { isOverdue, projectPercentComplete } from "@/lib/progress";
 import { ProjectTabs } from "./ProjectTabs";
+import { AISummaryCard } from "@/components/ai/AISummaryCard";
 
 export default async function ProjectOverviewPage({
   params,
@@ -118,6 +119,13 @@ export default async function ProjectOverviewPage({
               {project.endDate ? formatIST(project.endDate, "dd MMM yy") : "—"}
             </span>
           }
+        />
+      </div>
+
+      <div className="mb-5">
+        <AISummaryCard
+          endpoint={`/api/ai/summary/project/${id}`}
+          label="AI project snapshot"
         />
       </div>
 

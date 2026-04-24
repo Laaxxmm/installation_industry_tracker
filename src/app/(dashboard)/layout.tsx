@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/server/auth";
 import { Sidebar, TopBar, SignOutButton } from "@/components/sab";
+import { AIAssistantLauncher } from "@/components/ai/AIAssistantLauncher";
+import { aiEnabled } from "@/lib/ai/client";
 
 export default async function DashboardLayout({
   children,
@@ -39,6 +41,7 @@ export default async function DashboardLayout({
         />
         <main style={{ flex: 1, padding: "20px 24px", overflowY: "auto" }}>{children}</main>
       </div>
+      {aiEnabled() && <AIAssistantLauncher />}
     </div>
   );
 }

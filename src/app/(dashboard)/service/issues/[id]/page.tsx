@@ -20,6 +20,7 @@ import {
 } from "@/server/actions/service-issues";
 import { billServiceIssue } from "@/server/actions/service-billing";
 import { Code, KPI, PageHeader, Pill, fmtDate, inr } from "@/components/sab";
+import { AISummaryCard } from "@/components/ai/AISummaryCard";
 import { deriveCoverage } from "@/lib/service-coverage";
 import { applyHoldOffset } from "@/lib/sla";
 import { ServiceIssueActions } from "../ServiceIssueActions";
@@ -272,6 +273,10 @@ export default async function ServiceIssueDetailPage({
         </div>
 
         <aside className="grid gap-4">
+          <AISummaryCard
+            endpoint={`/api/ai/summary/service-issue/${issue.id}`}
+            label="AI summary"
+          />
           {canManage && (
             <section
               className="rounded border p-4"
