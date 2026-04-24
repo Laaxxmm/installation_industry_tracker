@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createQuote } from "@/server/actions/quotes";
+import { AIDraftButton } from "@/components/ai/AIDraftButton";
+import type { QuoteDraftOutput } from "@/lib/ai/drafts";
 import {
   emptyLine,
   QuoteLineEditor,
@@ -45,6 +47,24 @@ export function NewQuoteForm({
     setClientId(id);
     const c = clients.find((x) => x.id === id);
     if (c) setPlaceOfSupplyStateCode(c.stateCode);
+  }
+
+  function applyDraft(draft: QuoteDraftOutput) {
+    setLines(
+      draft.lines.map((l) => ({
+        key: Math.random().toString(36).slice(2),
+        category: l.category,
+        description: l.description,
+        hsnSac: l.hsnSac ?? "",
+        quantity: String(l.quantity),
+        unit: l.unit,
+        unitPrice: String(l.unitPrice),
+        discountPct: String(l.discountPct ?? "0"),
+        gstRatePct: String(l.gstRatePct ?? "18"),
+      })),
+    );
+    if (draft.notesSuggestion && !notes) setNotes(draft.notesSuggestion);
+    if (draft.termsSuggestion && !termsMd) setTermsMd(draft.termsSuggestion);
   }
 
   function submit(e: React.FormEvent) {
@@ -152,8 +172,18 @@ export function NewQuoteForm({
       </div>
 
       <div>
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          Line items
+        <div className="mb-2 flex items-center justify-between">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            Line items
+          </div>
+          <AIDraftButton<QuoteDraftOutput>
+            endpoint="/api/ai/draft/quote"
+            context={{ clientId }}
+            disabled={!clientId}
+            onDraft={applyDraft}
+            title="Draft quote lines with AI"
+            placeholder="E.g. 24 pendant sprinklers + 150m of 50mm GI pipe for a basement retrofit at Apollo Hospital; include labour + commissioning"
+          />
         </div>
         <QuoteLineEditor
           lines={lines}

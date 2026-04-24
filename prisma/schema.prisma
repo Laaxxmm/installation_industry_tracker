@@ -1198,3 +1198,26 @@ model ServiceTicketNumberSequence {
   year Int @id
   next Int @default(1)
 }
+
+// ---------- AI agent (cost + audit log) ----------
+// Every LLM call records a row here so `cost-guard.ts` can enforce a
+// per-user daily token budget and we retain a hashed fingerprint of each
+// prompt (PII stripped upstream by `redact.ts`) for auditability. Not FK-
+// linked to User so the row survives user deletion for post-hoc audit.
+
+model AIPromptLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  feature    String
+  promptHash String
+  modelName  String
+  inputTok   Int
+  outputTok  Int
+  costInr    Decimal  @db.Decimal(10, 4)
+  success    Boolean
+  errorCode  String?
+  at         DateTime @default(now())
+
+  @@index([userId, at])
+  @@index([feature, at])
+}

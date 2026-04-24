@@ -20,7 +20,9 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^1.0.0",
     "@auth/prisma-adapter": "^2.7.4",
+    "ai": "^4.0.0",
     "@capacitor/android": "^8.3.1",
     "@capacitor/core": "^8.3.1",
     "@capacitor/status-bar": "^8.0.2",

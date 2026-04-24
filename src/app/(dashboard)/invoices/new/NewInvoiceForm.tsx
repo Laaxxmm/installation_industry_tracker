@@ -14,6 +14,8 @@ import {
   type EditableInvoiceLine,
 } from "../InvoiceLineEditor";
 import { createClientInvoice } from "@/server/actions/client-invoices";
+import { AIDraftButton } from "@/components/ai/AIDraftButton";
+import type { InvoiceDraftOutput } from "@/lib/ai/drafts";
 
 type ProjectOption = {
   id: string;
@@ -95,6 +97,22 @@ export function NewInvoiceForm({
       },
     ]);
     toast.success("Seeded from unbilled remainder (assumes 18% GST)");
+  }
+
+  function applyDraft(draft: InvoiceDraftOutput) {
+    setLines(
+      draft.lines.map((l) => ({
+        key: Math.random().toString(36).slice(2),
+        description: l.description,
+        hsnSac: l.hsnSac ?? "",
+        quantity: String(l.quantity),
+        unit: l.unit,
+        unitPrice: String(l.unitPrice),
+        discountPct: String(l.discountPct ?? "0"),
+        gstRatePct: String(l.gstRatePct ?? "18"),
+      })),
+    );
+    if (draft.notesSuggestion && !notes) setNotes(draft.notesSuggestion);
   }
 
   const submit = () => {
@@ -217,7 +235,17 @@ export function NewInvoiceForm({
       </div>
 
       <div className="rounded-md border border-slate-200 bg-white p-5 shadow-card">
-        <h3 className="mb-3 text-[14px] font-semibold text-slate-900">Lines</h3>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-[14px] font-semibold text-slate-900">Lines</h3>
+          <AIDraftButton<InvoiceDraftOutput>
+            endpoint="/api/ai/draft/invoice"
+            context={{ projectId, kind }}
+            disabled={!projectId}
+            onDraft={applyDraft}
+            title="Draft invoice lines with AI"
+            placeholder="E.g. 30% advance against PO for basement retrofit; due on receipt"
+          />
+        </div>
         <InvoiceLineEditor
           lines={lines}
           onChange={setLines}

@@ -11,6 +11,7 @@ import {
 import { PageHeader, KPI, Pill, Code, inr, fmtDate } from "@/components/sab";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { BillActions } from "./BillActions";
+import { VendorBillAnomalyCard } from "@/components/ai/VendorBillAnomalyCard";
 
 export default async function VendorBillDetailPage({
   params,
@@ -113,6 +114,8 @@ export default async function VendorBillDetailPage({
           }
         />
       </div>
+
+      {canAct && <VendorBillAnomalyCard billId={bill.id} />}
 
       {bill.discrepancyNote && (
         <div
