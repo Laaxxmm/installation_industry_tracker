@@ -24,7 +24,20 @@ const ROLE_STYLES: Record<string, string> = {
 export default async function AdminUsersPage() {
   await requireRole([Role.ADMIN]);
 
-  const users = await db.user.findMany({ orderBy: { createdAt: "asc" } });
+  // Explicit select drops passwordHash and other server-only fields. Pulling
+  // those into a server component just to render a table risks accidental
+  // logging.
+  const users = await db.user.findMany({
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      employmentType: true,
+      active: true,
+    },
+  });
 
   const active = users.filter((u) => u.active).length;
   const byRole = users.reduce<Record<string, number>>((acc, u) => {

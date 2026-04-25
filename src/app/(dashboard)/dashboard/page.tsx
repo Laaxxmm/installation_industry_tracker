@@ -3,7 +3,7 @@ import { Decimal } from "decimal.js";
 import { InvoiceStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { requireSession } from "@/server/rbac";
-import { getProjectPnl } from "@/server/actions/pnl";
+import { getProjectPnlBatch } from "@/server/actions/pnl";
 import { DashboardFyFilter } from "./DashboardFyFilter";
 import { DashboardDescriptionFilter } from "./DashboardDescriptionFilter";
 import { toDecimal, zero } from "@/lib/money";
@@ -234,17 +234,20 @@ export default async function DashboardPage({
   for (let y = currentFyYear; y >= oldestFyYear; y--) fyYears.push(y);
 
   const pnlRange = scopeRange ?? { from: new Date("2000-01-01"), to: new Date("2099-12-31") };
-  const pnlRows = await Promise.all(
-    projectsInScope.map(async (p) => {
-      const pnlRow = await getProjectPnl(p.id, pnlRange);
-      return {
-        ...pnlRow,
-        material: pnlRow.directMaterial,
-        contribution: pnlRow.contributionMargin,
-        netPnl: pnlRow.netPnl,
-      };
-    }),
+  // Single batched load: 11 Prisma queries total instead of 11 × N projects.
+  const pnlByProject = await getProjectPnlBatch(
+    projectsInScope.map((p) => p.id),
+    pnlRange,
   );
+  const pnlRows = projectsInScope
+    .map((p) => pnlByProject.get(p.id))
+    .filter((r): r is NonNullable<typeof r> => r !== undefined)
+    .map((pnlRow) => ({
+      ...pnlRow,
+      material: pnlRow.directMaterial,
+      contribution: pnlRow.contributionMargin,
+      netPnl: pnlRow.netPnl,
+    }));
   const pnl = {
     revenue: pnlRows.reduce<Decimal>((a, r) => a.plus(r.revenue), zero()),
     labor: pnlRows.reduce<Decimal>((a, r) => a.plus(r.directLabor), zero()),

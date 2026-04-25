@@ -5,7 +5,11 @@ import { Role } from "@prisma/client";
 import { Decimal } from "decimal.js";
 import { db } from "@/server/db";
 import { requireSession, hasRole } from "@/server/rbac";
-import { getProjectPnl, defaultRangeForProject } from "@/server/actions/pnl";
+import {
+  getProjectPnl,
+  getProjectPnlBatch,
+  defaultRangeForProject,
+} from "@/server/actions/pnl";
 import { formatINR, sum, zero } from "@/lib/money";
 import { formatIST } from "@/lib/time";
 import { Button } from "@/components/ui/button";
@@ -42,23 +46,53 @@ export default async function ReportsPage({
     },
   });
 
-  const rows = await Promise.all(
-    projects.map(async (p) => {
-      const effectiveRange =
-        fromStr || toStr
-          ? { from, to }
-          : defaultRangeForProject(p.startDate, p.endDate);
-      const pnl = await getProjectPnl(p.id, effectiveRange);
-      // directMaterial already includes the project-level materialsSupplied override.
-      return {
-        project: p,
-        pnl,
-        material: pnl.directMaterial,
-        contribution: pnl.contributionMargin,
-        netPnl: pnl.netPnl,
-      };
-    }),
-  );
+  // When a date range is explicitly set, all projects share the same range
+  // and we can batch-load with one set of 11 Prisma queries instead of 11 × N.
+  // Without an explicit range, each project uses its own start/end so we fall
+  // back to the per-project loop (still parallel via Promise.all).
+  const rangeIsExplicit = Boolean(fromStr || toStr);
+  let rows: Array<{
+    project: (typeof projects)[number];
+    pnl: Awaited<ReturnType<typeof getProjectPnl>>;
+    material: Decimal;
+    contribution: Decimal;
+    netPnl: Decimal;
+  }>;
+  if (rangeIsExplicit) {
+    const pnlByProject = await getProjectPnlBatch(
+      projects.map((p) => p.id),
+      { from, to },
+    );
+    rows = projects
+      .map((p) => {
+        const pnl = pnlByProject.get(p.id);
+        if (!pnl) return null;
+        return {
+          project: p,
+          pnl,
+          material: pnl.directMaterial,
+          contribution: pnl.contributionMargin,
+          netPnl: pnl.netPnl,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+  } else {
+    rows = await Promise.all(
+      projects.map(async (p) => {
+        const pnl = await getProjectPnl(
+          p.id,
+          defaultRangeForProject(p.startDate, p.endDate),
+        );
+        return {
+          project: p,
+          pnl,
+          material: pnl.directMaterial,
+          contribution: pnl.contributionMargin,
+          netPnl: pnl.netPnl,
+        };
+      }),
+    );
+  }
 
   const totals = {
     contractValue: sum(projects.map((p) => p.contractValue)),

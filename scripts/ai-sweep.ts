@@ -49,6 +49,31 @@ function defaultModel() {
   return anthropic(process.env.AI_MODEL_DEFAULT ?? "claude-sonnet-4-5");
 }
 
+// Tiny concurrency-limited map. Avoids a `p-limit` dep — this script only
+// needs the basics. Each worker picks the next item until the array is
+// exhausted; results are returned in input order. Errors thrown inside the
+// mapper bubble up and abort the rest.
+async function pMap<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      while (true) {
+        const idx = cursor++;
+        if (idx >= items.length) return;
+        results[idx] = await mapper(items[idx], idx);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 const TERMINAL_SERVICE: ServiceStatus[] = [
   ServiceStatus.CLOSED,
   ServiceStatus.CANCELLED,
@@ -108,8 +133,9 @@ async function predictSLARisk(now: Date) {
     return 0;
   }
 
-  let scored = 0;
-  for (const t of atRisk) {
+  // Score up to 5 tickets concurrently. Each call is ~5-8s of network I/O
+  // to Anthropic, so 25 sequential calls ≈ 2-3 min vs. ~30s with concurrency 5.
+  const scoredFlags = await pMap(atRisk, 5, async (t) => {
     const percentElapsed = Math.round(
       ((now.getTime() - t.reportedAt.getTime()) /
         (t.resolutionDueAt!.getTime() - t.reportedAt.getTime())) *
@@ -143,7 +169,7 @@ async function predictSLARisk(now: Date) {
         ].join("\n"),
       });
 
-      if (object.risk === "LOW") continue;
+      if (object.risk === "LOW") return false;
 
       await db.auditLog.create({
         data: {
@@ -157,12 +183,13 @@ async function predictSLARisk(now: Date) {
         `  [SLA ${object.risk}] ${t.ticketNo} (${percentElapsed}% elapsed) → ${object.nudge}`,
       );
       console.log(`         reason: ${object.reason}`);
-      scored++;
+      return true;
     } catch (err) {
       console.error(`  [SLA risk] ${t.ticketNo} failed:`, err);
+      return false;
     }
-  }
-  return scored;
+  });
+  return scoredFlags.filter(Boolean).length;
 }
 
 // ---------- Pass 2: Stock mismatch (deterministic) ----------
@@ -233,14 +260,15 @@ async function draftOverdueNudges(now: Date) {
     return 0;
   }
 
-  let drafted = 0;
-  for (const inv of overdue) {
-    if (!inv.dueAt) continue;
+  // Up to 3 nudge drafts concurrently. Lower than SLA risk (5) because each
+  // call uses the heavier `defaultModel()` and the output is longer.
+  const draftFlags = await pMap(overdue, 3, async (inv) => {
+    if (!inv.dueAt) return false;
     const daysOverdue = Math.floor(
       (now.getTime() - inv.dueAt.getTime()) / (24 * 60 * 60 * 1000),
     );
     const outstanding = Number(inv.grandTotal) - Number(inv.amountPaid);
-    if (outstanding <= 0) continue;
+    if (outstanding <= 0) return false;
 
     try {
       const { text } = await generateText({
@@ -263,23 +291,22 @@ async function draftOverdueNudges(now: Date) {
           entityId: inv.id,
         },
       });
-      console.log(
+      // Buffer all the per-invoice console output so concurrent workers
+      // don't interleave each other's blocks of email-draft text.
+      const block = [
         `  [nudge drafted] ${inv.invoiceNo} ${inv.client.name} · ${daysOverdue}d overdue · ${formatINR(outstanding)}`,
-      );
-      console.log("         ----- draft email -----");
-      console.log(
-        text
-          .split("\n")
-          .map((l) => `         ${l}`)
-          .join("\n"),
-      );
-      console.log("         -----------------------");
-      drafted++;
+        "         ----- draft email -----",
+        ...text.split("\n").map((l) => `         ${l}`),
+        "         -----------------------",
+      ].join("\n");
+      console.log(block);
+      return true;
     } catch (err) {
       console.error(`  [nudge] ${inv.invoiceNo} failed:`, err);
+      return false;
     }
-  }
-  return drafted;
+  });
+  return draftFlags.filter(Boolean).length;
 }
 
 // ---------- Main ----------

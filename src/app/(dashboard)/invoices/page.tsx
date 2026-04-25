@@ -58,7 +58,14 @@ export default async function InvoicesIndexPage({
     db.clientInvoice.findMany({
       orderBy: [{ createdAt: "desc" }],
       take: 500,
-      include: {
+      select: {
+        id: true,
+        invoiceNo: true,
+        kind: true,
+        status: true,
+        issuedAt: true,
+        grandTotal: true,
+        amountPaid: true,
         client: { select: { name: true } },
         project: { select: { code: true, name: true } },
       },
