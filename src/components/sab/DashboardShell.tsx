@@ -78,17 +78,29 @@ export function DashboardShell({ userName, userRole, topBarRight, children }: Pr
       {/* Sidebar
           - desktop (md+): static block in the flex flow, sticky-top, full
             content visible
-          - mobile: fixed-positioned drawer that slides in from the left */}
+          - mobile: fixed-positioned drawer that slides in from the left.
+            `position: fixed` ignores the parent's safe-area padding, so
+            we set its top via inline style to respect the Android system
+            status bar; otherwise the wordmark would be hidden behind it. */}
       <div
         className={[
           "z-50",
           // desktop: in-flow, sticky, full height
           "md:sticky md:top-0 md:h-screen md:flex",
           // mobile: fixed off-screen until drawerOpen flips it
-          "fixed inset-y-0 left-0 transition-transform duration-200",
+          "fixed bottom-0 left-0 transition-transform duration-200",
           drawerOpen ? "translate-x-0" : "-translate-x-full",
           "md:translate-x-0",
+          // Reset the safe-area inset on desktop so the sidebar starts at
+          // top:0 (in-flow makes top irrelevant on md+ anyway).
+          "md:!top-0",
         ].join(" ")}
+        // Mobile-only: push the drawer below the system status bar.
+        // The CSS variable falls back to 28px on non-notched Android
+        // (where env() reports 0) and to the actual inset on notched.
+        style={{
+          top: "max(env(safe-area-inset-top), 28px)",
+        }}
       >
         <Sidebar userName={userName} userRole={userRole} />
       </div>

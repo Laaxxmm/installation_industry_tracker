@@ -14,9 +14,12 @@ interface PageHeaderProps {
 
 export function PageHeader({ eyebrow, title, description, actions, tabs }: PageHeaderProps) {
   return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24 }}>
-        <div>
+    <div className="mb-5 md:mb-6">
+      {/* Title row: stacks (title above actions) on mobile, side-by-side on
+          desktop. Title shrinks from 26px to 20px below sm so common
+          greetings like "Good afternoon, Kishore" fit on one line. */}
+      <div className="flex flex-col items-start justify-between gap-3 md:flex-row md:items-start md:gap-6">
+        <div className="min-w-0">
           {eyebrow && (
             <div
               className="sab-eyebrow"
@@ -26,6 +29,7 @@ export function PageHeader({ eyebrow, title, description, actions, tabs }: PageH
             </div>
           )}
           <h1
+            className="sab-page-title"
             style={{
               fontFamily: "var(--font-sab-sans), Inter Tight, system-ui, sans-serif",
               fontSize: 26,
@@ -53,7 +57,7 @@ export function PageHeader({ eyebrow, title, description, actions, tabs }: PageH
           )}
         </div>
         {actions && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>{actions}</div>
+          <div className="flex flex-wrap items-center gap-2 md:flex-none">{actions}</div>
         )}
       </div>
       {tabs && <div style={{ marginTop: 20, borderBottom: `1px solid ${SAB.rule}` }}>{tabs}</div>}

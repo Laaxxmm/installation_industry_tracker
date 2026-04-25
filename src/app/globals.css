@@ -218,6 +218,16 @@
       padding-top: max(env(safe-area-inset-top), 28px);
     }
 
+    /* Shrink the editorial page title on mobile. The desktop 26px is too
+       big for ~360px viewports — common 2-word greetings wrap to 3
+       lines. Drop to 20px so titles like "Good afternoon, Kishore" fit
+       on one or two lines. Inline `style={{ fontSize: 26 }}` in
+       PageHeader is overridden by !important here. */
+    .sab-page-title {
+      font-size: 20px !important;
+      line-height: 1.2 !important;
+    }
+
     /* Scroll any wide table inside main content. The double wrapper
        ensures we don't cut off the table's first column. */
     main table {
