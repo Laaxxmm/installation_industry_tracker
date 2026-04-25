@@ -206,6 +206,18 @@
    *     gridTemplateColumns collapse to a single column.
    */
   @media (max-width: 767px) {
+    /* Push the dashboard shell content below the Android system status
+       bar. Capacitor's overlaysWebView=false setting isn't reliable on
+       all Android versions (the WindowCompat call in MainActivity gets
+       re-applied late by Capacitor's edge-to-edge wiring), so we
+       guarantee the inset in CSS. The (mobile) route group does the
+       same trick at its own outer wrapper. 28px floor covers
+       non-notched Android where env() reports 0. Desktop browsers
+       don't reach this media query. */
+    .sab-dashboard-shell {
+      padding-top: max(env(safe-area-inset-top), 28px);
+    }
+
     /* Scroll any wide table inside main content. The double wrapper
        ensures we don't cut off the table's first column. */
     main table {

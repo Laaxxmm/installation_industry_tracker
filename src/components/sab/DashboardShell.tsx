@@ -54,7 +54,12 @@ export function DashboardShell({ userName, userRole, topBarRight, children }: Pr
 
   return (
     <div
-      className="flex min-h-screen"
+      // `sab-dashboard-shell` triggers the safe-area-inset top padding rule
+      // in globals.css for Capacitor / mobile-WebView builds where the
+      // system status bar would otherwise overlap our TopBar (Android
+      // edge-to-edge defaults). Desktop browsers report env() = 0 so the
+      // workaround only kicks in below 768px.
+      className="sab-dashboard-shell flex min-h-screen"
       style={{
         background: "var(--sab-paper)",
         color: "var(--sab-ink)",
