@@ -1,34 +1,39 @@
 /* eslint-disable no-console */
-// Wipes all business data so the system can be loaded with fresh records.
-// Schema, migrations, and a small "keep" set survive untouched.
+// Wipes ALL business + user data so the system can be loaded fresh.
+// Schema and migrations survive untouched. After running this, log-in is
+// IMPOSSIBLE until you run scripts/create-admin.ts to seed one ADMIN user.
 //
 // Usage:
 //   tsx --env-file=.env.local scripts/wipe-data.ts                 # dry-run
 //   WIPE_CONFIRM=YES_DELETE_EVERYTHING tsx --env-file=.env.local scripts/wipe-data.ts
 //
 // Against Railway production:
-//   set DATABASE_URL=<railway-prod-url>
-//   WIPE_CONFIRM=YES_DELETE_EVERYTHING tsx scripts/wipe-data.ts
+//   DATABASE_URL='<railway-url>' WIPE_CONFIRM=YES_DELETE_EVERYTHING \
+//     npx tsx scripts/wipe-data.ts
+//   # then immediately:
+//   ADMIN_EMAIL=... ADMIN_NAME=... ADMIN_PASSWORD=... \
+//     DATABASE_URL='<railway-url>' npx tsx scripts/create-admin.ts
 //
-// PRESERVES (Option D from the audit conversation):
-//   - User                  · login users
-//   - EmployeeRateCard      · payroll config bound to users
-//   - AIPromptLog           · 24h cost-guard window stays valid
+// PRESERVES:
 //   - _prisma_migrations    · system table, never touch
 //
-// WIPES (everything else): all business + audit + sequence tables.
+// WIPES (everything else): all business + audit + sequence + user tables.
+// This is the "blank slate" version. To bootstrap a real admin user back in
+// after this runs, use `scripts/create-admin.ts`.
+//
 // Uses one TRUNCATE ... CASCADE so Postgres handles FK order itself.
 
 import { PrismaClient } from "@prisma/client";
 
 const db = new PrismaClient();
 
-const KEEP_TABLES = ["User", "EmployeeRateCard", "AIPromptLog"] as const;
+const KEEP_TABLES: readonly string[] = [];
 
 // Order doesn't matter inside one CASCADE — Postgres works it out.
 const WIPE_TABLES = [
   // Audit
   "AuditLog",
+  "AIPromptLog",
 
   // Sales
   "ClientInvoiceLine",
@@ -89,6 +94,11 @@ const WIPE_TABLES = [
   "VendorBillNumberSequence",
   "AMCNumberSequence",
   "ServiceTicketNumberSequence",
+
+  // Users + payroll config (cascade handles FKs but listing them keeps
+  // the wipe explicit and TRUNCATE atomic).
+  "EmployeeRateCard",
+  "User",
 ] as const;
 
 async function rowCounts(tables: readonly string[]): Promise<Record<string, number>> {
