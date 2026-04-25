@@ -11,7 +11,19 @@ import bcrypt from "bcryptjs";
 const db = new PrismaClient();
 
 async function main() {
-  const passwordHash = await bcrypt.hash("password123", 10);
+  // Demo data (users, rate cards, materials, clients, the SAB-2026-0001
+  // project, sequences) only runs when SEED_DEMO_DATA is explicitly set.
+  // Production deploys leave this unset, so even if SEED_DB=true is still
+  // wired up in the entrypoint the demo block is a no-op.
+  const seedDemo = process.env.SEED_DEMO_DATA === "true";
+  if (!seedDemo) {
+    console.log(
+      "Demo seed skipped (SEED_DEMO_DATA != 'true'). Running stage backfill only.",
+    );
+  }
+
+  if (seedDemo) {
+    const passwordHash = await bcrypt.hash("password123", 10);
 
   // --- Users ---
   const users = [
@@ -143,12 +155,35 @@ async function main() {
     },
   });
 
-  // --- Project code sequence bookkeeping ---
-  await db.projectCodeSequence.upsert({
-    where: { year: 2026 },
-    update: {},
-    create: { year: 2026, next: 2 },
-  });
+    // --- Project code sequence bookkeeping (demo project took #1) ---
+    await db.projectCodeSequence.upsert({
+      where: { year: 2026 },
+      update: {},
+      create: { year: 2026, next: 2 },
+    });
+
+    // --- Sales pipeline sequences (demo block; the app self-initialises
+    //     these via upsert when the first quote/PO/invoice is created) ---
+    await db.quoteNumberSequence.upsert({
+      where: { year: 2026 },
+      update: {},
+      create: { year: 2026, next: 1 },
+    });
+    await db.pONumberSequence.upsert({
+      where: { year: 2026 },
+      update: {},
+      create: { year: 2026, next: 1 },
+    });
+    await db.clientInvoiceNumberSequence.upsert({
+      where: { year: 2026 },
+      update: {},
+      create: { year: 2026, next: 1 },
+    });
+
+    console.log(
+      "Demo seed complete. Users: admin@sab.local / manager@sab.local / super@sab.local / hourly@sab.local / salaried@sab.local — password: password123",
+    );
+  }
 
   // --- Backfill: seed 5 stage rows for every project without stages ---
   const projectsNeedingStages = await db.project.findMany({
@@ -169,26 +204,6 @@ async function main() {
     });
   }
 
-  // --- Sales pipeline sequences ---
-  await db.quoteNumberSequence.upsert({
-    where: { year: 2026 },
-    update: {},
-    create: { year: 2026, next: 1 },
-  });
-  await db.pONumberSequence.upsert({
-    where: { year: 2026 },
-    update: {},
-    create: { year: 2026, next: 1 },
-  });
-  await db.clientInvoiceNumberSequence.upsert({
-    where: { year: 2026 },
-    update: {},
-    create: { year: 2026, next: 1 },
-  });
-
-  console.log(
-    "Seed complete. Users: admin@sab.local / manager@sab.local / super@sab.local / hourly@sab.local / salaried@sab.local — password: password123",
-  );
   console.log(`Backfilled stages for ${projectsNeedingStages.length} project(s).`);
 }
 
