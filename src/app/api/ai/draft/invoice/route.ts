@@ -3,11 +3,9 @@ import { z } from "zod";
 import { aiEnabled, extractJson, modelName } from "@/lib/ai/client";
 import { requireSession } from "@/server/rbac";
 import {
-  assertRateLimit,
   assertWithinBudget,
   recordUsage,
   CostBudgetExceededError,
-  RateLimitedError,
 } from "@/lib/ai/cost-guard";
 import {
   InvoiceDraftOutput,
@@ -36,31 +34,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const parsed = Body.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid body" },
-      { status: 400 },
-    );
-  }
-  const { projectId, kind, brief } = parsed.data;
-
-  // Run rate limit, budget check, and Prisma context fetch in parallel —
-  // all independent reads.
-  let context: Awaited<ReturnType<typeof fetchInvoiceContext>>;
   try {
-    [, , context] = await Promise.all([
-      assertRateLimit(session.user.id),
-      assertWithinBudget(session.user.id),
-      fetchInvoiceContext(projectId),
-    ]);
+    await assertWithinBudget(session.user.id);
   } catch (err) {
-    if (err instanceof RateLimitedError) {
-      return NextResponse.json(
-        { error: "Too many AI requests. Please wait a few seconds." },
-        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
-      );
-    }
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
         { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
@@ -70,6 +46,16 @@ export async function POST(req: Request) {
     throw err;
   }
 
+  const parsed = Body.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid body" },
+      { status: 400 },
+    );
+  }
+  const { projectId, kind, brief } = parsed.data;
+
+  const context = await fetchInvoiceContext(projectId);
   if (!context) {
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
@@ -102,7 +88,6 @@ export async function POST(req: Request) {
     return NextResponse.json(object);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[ai/draft/invoice] failed:", message);
     await recordUsage({
       userId: session.user.id,
       feature: "draft-invoice",
@@ -114,7 +99,7 @@ export async function POST(req: Request) {
       errorCode: message.slice(0, 120),
     }).catch(() => {});
     return NextResponse.json(
-      { error: "Invoice draft failed. Please retry." },
+      { error: "Draft failed: " + message },
       { status: 500 },
     );
   }

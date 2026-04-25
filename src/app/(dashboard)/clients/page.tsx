@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { Role } from "@prisma/client";
 import { db } from "@/server/db";
 import { requireSession, hasRole } from "@/server/rbac";

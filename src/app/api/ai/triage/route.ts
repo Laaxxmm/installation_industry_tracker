@@ -3,11 +3,9 @@ import { z } from "zod";
 import { aiEnabled, extractJson, fastModel, modelName } from "@/lib/ai/client";
 import { requireSession } from "@/server/rbac";
 import {
-  assertRateLimit,
   assertWithinBudget,
   recordUsage,
   CostBudgetExceededError,
-  RateLimitedError,
 } from "@/lib/ai/cost-guard";
 import {
   TriageDraftOutput,
@@ -39,6 +37,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
+  try {
+    await assertWithinBudget(session.user.id);
+  } catch (err) {
+    if (err instanceof CostBudgetExceededError) {
+      return NextResponse.json(
+        { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
+        { status: 429 },
+      );
+    }
+    throw err;
+  }
+
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json(
@@ -49,35 +59,12 @@ export async function POST(req: Request) {
   const { clientId, projectId, amcId, summary, description, reportedAt } =
     parsed.data;
 
-  // Run rate limit, budget check, and Prisma context fetch in parallel —
-  // all independent reads.
-  let context: Awaited<ReturnType<typeof fetchTriageContext>>;
-  try {
-    [, , context] = await Promise.all([
-      assertRateLimit(session.user.id),
-      assertWithinBudget(session.user.id),
-      fetchTriageContext({
-        clientId,
-        projectId,
-        amcId: amcId ?? null,
-        reportedAt: reportedAt ? new Date(reportedAt) : new Date(),
-      }),
-    ]);
-  } catch (err) {
-    if (err instanceof RateLimitedError) {
-      return NextResponse.json(
-        { error: "Too many AI requests. Please wait a few seconds." },
-        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
-      );
-    }
-    if (err instanceof CostBudgetExceededError) {
-      return NextResponse.json(
-        { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
-        { status: 429 },
-      );
-    }
-    throw err;
-  }
+  const context = await fetchTriageContext({
+    clientId,
+    projectId,
+    amcId: amcId ?? null,
+    reportedAt: reportedAt ? new Date(reportedAt) : new Date(),
+  });
 
   const { system, prompt } = buildTriagePrompt({ summary, description, context });
 
@@ -106,7 +93,6 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[ai/triage] failed:", message);
     await recordUsage({
       userId: session.user.id,
       feature: "triage",
@@ -118,7 +104,7 @@ export async function POST(req: Request) {
       errorCode: message.slice(0, 120),
     }).catch(() => {});
     return NextResponse.json(
-      { error: "Triage suggestion failed. Please retry." },
+      { error: "Triage failed: " + message },
       { status: 500 },
     );
   }

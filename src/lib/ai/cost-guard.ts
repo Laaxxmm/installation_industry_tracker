@@ -20,13 +20,6 @@ export class CostBudgetExceededError extends Error {
   }
 }
 
-export class RateLimitedError extends Error {
-  constructor(public retryAfterSeconds: number) {
-    super(`Too many AI requests. Retry in ${retryAfterSeconds}s.`);
-    this.name = "RateLimitedError";
-  }
-}
-
 export async function usedTokensLast24h(userId: string): Promise<number> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const rows = await db.aIPromptLog.findMany({
@@ -40,24 +33,6 @@ export async function assertWithinBudget(userId: string): Promise<void> {
   const used = await usedTokensLast24h(userId);
   const budget = budgetPerUser();
   if (used >= budget) throw new CostBudgetExceededError(used, budget);
-}
-
-// Per-user request-rate limit. Bursts of >`max` AI calls in `windowSec`
-// throw `RateLimitedError`. Backed by AIPromptLog so it works across
-// multiple Railway replicas (vs. an in-memory token-bucket which would
-// be per-instance only). Defaults to 5 req / 10s — generous for normal
-// human use, tight enough to throttle a script.
-export async function assertRateLimit(
-  userId: string,
-  opts?: { windowSec?: number; max?: number },
-): Promise<void> {
-  const windowSec = opts?.windowSec ?? 10;
-  const max = opts?.max ?? 5;
-  const since = new Date(Date.now() - windowSec * 1000);
-  const recent = await db.aIPromptLog.count({
-    where: { userId, at: { gte: since } },
-  });
-  if (recent >= max) throw new RateLimitedError(windowSec);
 }
 
 export interface UsageRecord {

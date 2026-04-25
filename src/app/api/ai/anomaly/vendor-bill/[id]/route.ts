@@ -3,11 +3,9 @@ import { aiEnabled, extractJson, defaultModel, modelName } from "@/lib/ai/client
 import { requireRole } from "@/server/rbac";
 import { Role } from "@prisma/client";
 import {
-  assertRateLimit,
   assertWithinBudget,
   recordUsage,
   CostBudgetExceededError,
-  RateLimitedError,
 } from "@/lib/ai/cost-guard";
 import {
   VendorBillAnomalyOutput,
@@ -34,24 +32,9 @@ export async function GET(
     return NextResponse.json({ error: "Not authorised." }, { status: 403 });
   }
 
-  const { id } = await context.params;
-
-  // Run rate limit, budget check, and Prisma context fetch in parallel —
-  // all independent reads.
-  let ctx: Awaited<ReturnType<typeof fetchVendorBillAnomalyContext>>;
   try {
-    [, , ctx] = await Promise.all([
-      assertRateLimit(session.user.id),
-      assertWithinBudget(session.user.id),
-      fetchVendorBillAnomalyContext(id),
-    ]);
+    await assertWithinBudget(session.user.id);
   } catch (err) {
-    if (err instanceof RateLimitedError) {
-      return NextResponse.json(
-        { error: "Too many AI requests. Please wait a few seconds." },
-        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
-      );
-    }
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
         { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
@@ -61,6 +44,8 @@ export async function GET(
     throw err;
   }
 
+  const { id } = await context.params;
+  const ctx = await fetchVendorBillAnomalyContext(id);
   if (!ctx) {
     return NextResponse.json({ error: "Bill not found." }, { status: 404 });
   }
@@ -89,7 +74,6 @@ export async function GET(
     return NextResponse.json(object);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[ai/anomaly/vendor-bill] failed:", message);
     await recordUsage({
       userId: session.user.id,
       feature: "anomaly-vendor-bill",
@@ -101,7 +85,7 @@ export async function GET(
       errorCode: message.slice(0, 120),
     }).catch(() => {});
     return NextResponse.json(
-      { error: "Anomaly scan failed. Please retry." },
+      { error: "Anomaly scan failed: " + message },
       { status: 500 },
     );
   }

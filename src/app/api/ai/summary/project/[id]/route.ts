@@ -3,11 +3,9 @@ import { generateText } from "ai";
 import { aiEnabled, fastModel, modelName } from "@/lib/ai/client";
 import { requireSession } from "@/server/rbac";
 import {
-  assertRateLimit,
   assertWithinBudget,
   recordUsage,
   CostBudgetExceededError,
-  RateLimitedError,
 } from "@/lib/ai/cost-guard";
 import {
   buildProjectSummaryPrompt,
@@ -32,24 +30,9 @@ export async function GET(
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const { id } = await context.params;
-
-  // Run rate limit, budget check, and Prisma context fetch in parallel —
-  // all independent reads.
-  let ctx: Awaited<ReturnType<typeof fetchProjectSummaryContext>>;
   try {
-    [, , ctx] = await Promise.all([
-      assertRateLimit(session.user.id),
-      assertWithinBudget(session.user.id),
-      fetchProjectSummaryContext(id),
-    ]);
+    await assertWithinBudget(session.user.id);
   } catch (err) {
-    if (err instanceof RateLimitedError) {
-      return NextResponse.json(
-        { error: "Too many AI requests. Please wait a few seconds." },
-        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
-      );
-    }
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
         { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
@@ -59,6 +42,8 @@ export async function GET(
     throw err;
   }
 
+  const { id } = await context.params;
+  const ctx = await fetchProjectSummaryContext(id);
   if (!ctx) {
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
@@ -85,7 +70,6 @@ export async function GET(
     return NextResponse.json({ summary: text });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[ai/summary/project] failed:", message);
     await recordUsage({
       userId: session.user.id,
       feature: "summary-project",
@@ -97,7 +81,7 @@ export async function GET(
       errorCode: message.slice(0, 120),
     }).catch(() => {});
     return NextResponse.json(
-      { error: "Summary failed. Please retry." },
+      { error: "Summary failed: " + message },
       { status: 500 },
     );
   }

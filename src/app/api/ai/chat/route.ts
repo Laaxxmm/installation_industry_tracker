@@ -1,38 +1,17 @@
 import { NextResponse } from "next/server";
 import { streamText, type Message } from "ai";
-import { z } from "zod";
 import { aiEnabled, defaultModel, modelName } from "@/lib/ai/client";
 import { requireSession } from "@/server/rbac";
-import {
-  assertRateLimit,
-  assertWithinBudget,
-  recordUsage,
-  CostBudgetExceededError,
-  RateLimitedError,
-} from "@/lib/ai/cost-guard";
+import { assertWithinBudget, recordUsage, CostBudgetExceededError } from "@/lib/ai/cost-guard";
 import { buildReadTools } from "@/lib/ai/tools/read-tools";
 import { buildChatSystemPrompt } from "@/lib/ai/prompts/chat";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Defensive bounds — block oversized payloads at the gate before they hit
-// Anthropic. The Vercel AI SDK's `Message` type is structural; we validate
-// shape but pass through to streamText.
-const ChatBody = z.object({
-  messages: z
-    .array(
-      z.object({
-        role: z.enum(["user", "assistant", "system", "data"]),
-        content: z.union([
-          z.string().max(50_000),
-          z.array(z.unknown()).max(50),
-        ]),
-      }),
-    )
-    .min(1)
-    .max(50),
-});
+interface ChatBody {
+  messages: Message[];
+}
 
 export async function POST(req: Request) {
   if (!aiEnabled()) {
@@ -49,26 +28,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const parsed = ChatBody.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid request body." },
-      { status: 400 },
-    );
-  }
-
   try {
-    await Promise.all([
-      assertRateLimit(session.user.id),
-      assertWithinBudget(session.user.id),
-    ]);
+    await assertWithinBudget(session.user.id);
   } catch (err) {
-    if (err instanceof RateLimitedError) {
-      return NextResponse.json(
-        { error: "Too many AI requests. Please wait a few seconds." },
-        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
-      );
-    }
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
         { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens). Try again in 24h.` },
@@ -78,7 +40,8 @@ export async function POST(req: Request) {
     throw err;
   }
 
-  const messages = parsed.data.messages as Message[];
+  const body = (await req.json()) as ChatBody;
+  const messages = Array.isArray(body.messages) ? body.messages : [];
   const lastUserMsg = messages.filter((m) => m.role === "user").at(-1)?.content ?? "";
   const promptForHash = typeof lastUserMsg === "string" ? lastUserMsg : JSON.stringify(lastUserMsg);
 
