@@ -31,6 +31,10 @@ echo "  NEXTAUTH_SECRET is $([ -n "${NEXTAUTH_SECRET}" ] && echo SET || echo UNS
 echo "  AUTH_SECRET is $([ -n "${AUTH_SECRET}" ] && echo SET || echo UNSET)"
 echo "  NEXTAUTH_URL = ${NEXTAUTH_URL:-<unset>}"
 echo "  SEED_DB   = ${SEED_DB:-<unset>}"
+echo "  AI_ENABLED = ${AI_ENABLED:-<unset>}  (must be exactly 'true' to enable AI)"
+echo "  ANTHROPIC_API_KEY is $([ -n "${ANTHROPIC_API_KEY}" ] && echo SET || echo UNSET)"
+echo "  AI_MODEL_DEFAULT = ${AI_MODEL_DEFAULT:-<unset>}"
+echo "  AI_MODEL_FAST = ${AI_MODEL_FAST:-<unset>}"
 echo "============================================================"
 
 if [ -z "$DATABASE_URL" ]; then
