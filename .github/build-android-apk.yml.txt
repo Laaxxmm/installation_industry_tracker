@@ -41,10 +41,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 22
+        # Capacitor 8.x requires Node >= 22 (its CLI hard-fails on Node 20).
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
 
       - name: Install npm dependencies
