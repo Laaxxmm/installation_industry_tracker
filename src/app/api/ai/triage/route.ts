@@ -37,18 +37,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  try {
-    await assertWithinBudget(session.user.id);
-  } catch (err) {
-    if (err instanceof CostBudgetExceededError) {
-      return NextResponse.json(
-        { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
-        { status: 429 },
-      );
-    }
-    throw err;
-  }
-
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json(
@@ -59,12 +47,27 @@ export async function POST(req: Request) {
   const { clientId, projectId, amcId, summary, description, reportedAt } =
     parsed.data;
 
-  const context = await fetchTriageContext({
-    clientId,
-    projectId,
-    amcId: amcId ?? null,
-    reportedAt: reportedAt ? new Date(reportedAt) : new Date(),
-  });
+  // Run budget check and Prisma context fetch in parallel — independent reads.
+  let context: Awaited<ReturnType<typeof fetchTriageContext>>;
+  try {
+    [, context] = await Promise.all([
+      assertWithinBudget(session.user.id),
+      fetchTriageContext({
+        clientId,
+        projectId,
+        amcId: amcId ?? null,
+        reportedAt: reportedAt ? new Date(reportedAt) : new Date(),
+      }),
+    ]);
+  } catch (err) {
+    if (err instanceof CostBudgetExceededError) {
+      return NextResponse.json(
+        { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
+        { status: 429 },
+      );
+    }
+    throw err;
+  }
 
   const { system, prompt } = buildTriagePrompt({ summary, description, context });
 

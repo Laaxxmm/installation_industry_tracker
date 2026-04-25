@@ -32,8 +32,15 @@ export async function GET(
     return NextResponse.json({ error: "Not authorised." }, { status: 403 });
   }
 
+  const { id } = await context.params;
+
+  // Run budget check and Prisma context fetch in parallel — independent reads.
+  let ctx: Awaited<ReturnType<typeof fetchVendorBillAnomalyContext>>;
   try {
-    await assertWithinBudget(session.user.id);
+    [, ctx] = await Promise.all([
+      assertWithinBudget(session.user.id),
+      fetchVendorBillAnomalyContext(id),
+    ]);
   } catch (err) {
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
@@ -44,8 +51,6 @@ export async function GET(
     throw err;
   }
 
-  const { id } = await context.params;
-  const ctx = await fetchVendorBillAnomalyContext(id);
   if (!ctx) {
     return NextResponse.json({ error: "Bill not found." }, { status: 404 });
   }

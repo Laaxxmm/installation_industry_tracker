@@ -637,8 +637,10 @@ model ClientInvoice {
 
   @@index([projectId, issuedAt])
   @@index([status])
+  @@index([status, issuedAt])
   @@index([clientId])
   @@index([amcId])
+  @@index([createdAt])
 }
 
 model ClientInvoiceLine {
@@ -1156,6 +1158,7 @@ model ServiceIssue {
   invoice ClientInvoice?
 
   @@index([status, priority])
+  @@index([status, resolutionDueAt])
   @@index([clientId, reportedAt])
   @@index([projectId])
   @@index([assignedToUserId, status])

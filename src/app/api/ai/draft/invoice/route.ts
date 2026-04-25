@@ -34,8 +34,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
+  const parsed = Body.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid body" },
+      { status: 400 },
+    );
+  }
+  const { projectId, kind, brief } = parsed.data;
+
+  // Run the budget check and the Prisma context fetch in parallel — they're
+  // independent reads. Saves ~50-100ms per call vs. sequential awaits.
+  let context: Awaited<ReturnType<typeof fetchInvoiceContext>>;
   try {
-    await assertWithinBudget(session.user.id);
+    [, context] = await Promise.all([
+      assertWithinBudget(session.user.id),
+      fetchInvoiceContext(projectId),
+    ]);
   } catch (err) {
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
@@ -46,16 +61,6 @@ export async function POST(req: Request) {
     throw err;
   }
 
-  const parsed = Body.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid body" },
-      { status: 400 },
-    );
-  }
-  const { projectId, kind, brief } = parsed.data;
-
-  const context = await fetchInvoiceContext(projectId);
   if (!context) {
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }

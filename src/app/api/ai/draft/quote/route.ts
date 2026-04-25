@@ -36,8 +36,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
+  const parsed = Body.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid body" },
+      { status: 400 },
+    );
+  }
+  const { clientId, brief } = parsed.data;
+
+  // Run budget check and Prisma context fetch in parallel — independent reads.
+  let context: Awaited<ReturnType<typeof fetchQuoteContext>>;
   try {
-    await assertWithinBudget(session.user.id);
+    [, context] = await Promise.all([
+      assertWithinBudget(session.user.id),
+      fetchQuoteContext(clientId),
+    ]);
   } catch (err) {
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
@@ -48,16 +62,6 @@ export async function POST(req: Request) {
     throw err;
   }
 
-  const parsed = Body.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid body" },
-      { status: 400 },
-    );
-  }
-  const { clientId, brief } = parsed.data;
-
-  const context = await fetchQuoteContext(clientId);
   if (!context) {
     return NextResponse.json({ error: "Client not found." }, { status: 404 });
   }

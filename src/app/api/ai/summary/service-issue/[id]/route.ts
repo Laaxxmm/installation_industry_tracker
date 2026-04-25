@@ -30,8 +30,15 @@ export async function GET(
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
+  const { id } = await context.params;
+
+  // Run budget check and Prisma context fetch in parallel — independent reads.
+  let ctx: Awaited<ReturnType<typeof fetchServiceIssueSummaryContext>>;
   try {
-    await assertWithinBudget(session.user.id);
+    [, ctx] = await Promise.all([
+      assertWithinBudget(session.user.id),
+      fetchServiceIssueSummaryContext(id),
+    ]);
   } catch (err) {
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
@@ -42,8 +49,6 @@ export async function GET(
     throw err;
   }
 
-  const { id } = await context.params;
-  const ctx = await fetchServiceIssueSummaryContext(id);
   if (!ctx) {
     return NextResponse.json({ error: "Issue not found." }, { status: 404 });
   }
