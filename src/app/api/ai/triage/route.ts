@@ -3,9 +3,11 @@ import { z } from "zod";
 import { aiEnabled, extractJson, fastModel, modelName } from "@/lib/ai/client";
 import { requireSession } from "@/server/rbac";
 import {
+  assertRateLimit,
   assertWithinBudget,
   recordUsage,
   CostBudgetExceededError,
+  RateLimitedError,
 } from "@/lib/ai/cost-guard";
 import {
   TriageDraftOutput,
@@ -47,10 +49,12 @@ export async function POST(req: Request) {
   const { clientId, projectId, amcId, summary, description, reportedAt } =
     parsed.data;
 
-  // Run budget check and Prisma context fetch in parallel — independent reads.
+  // Run rate limit, budget check, and Prisma context fetch in parallel —
+  // all independent reads.
   let context: Awaited<ReturnType<typeof fetchTriageContext>>;
   try {
-    [, context] = await Promise.all([
+    [, , context] = await Promise.all([
+      assertRateLimit(session.user.id),
       assertWithinBudget(session.user.id),
       fetchTriageContext({
         clientId,
@@ -60,6 +64,12 @@ export async function POST(req: Request) {
       }),
     ]);
   } catch (err) {
+    if (err instanceof RateLimitedError) {
+      return NextResponse.json(
+        { error: "Too many AI requests. Please wait a few seconds." },
+        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
+      );
+    }
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
         { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
@@ -96,6 +106,7 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error("[ai/triage] failed:", message);
     await recordUsage({
       userId: session.user.id,
       feature: "triage",
@@ -107,7 +118,7 @@ export async function POST(req: Request) {
       errorCode: message.slice(0, 120),
     }).catch(() => {});
     return NextResponse.json(
-      { error: "Triage failed: " + message },
+      { error: "Triage suggestion failed. Please retry." },
       { status: 500 },
     );
   }

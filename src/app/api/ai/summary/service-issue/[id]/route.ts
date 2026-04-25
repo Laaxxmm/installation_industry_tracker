@@ -3,9 +3,11 @@ import { generateText } from "ai";
 import { aiEnabled, fastModel, modelName } from "@/lib/ai/client";
 import { requireSession } from "@/server/rbac";
 import {
+  assertRateLimit,
   assertWithinBudget,
   recordUsage,
   CostBudgetExceededError,
+  RateLimitedError,
 } from "@/lib/ai/cost-guard";
 import {
   buildServiceIssueSummaryPrompt,
@@ -32,14 +34,22 @@ export async function GET(
 
   const { id } = await context.params;
 
-  // Run budget check and Prisma context fetch in parallel — independent reads.
+  // Run rate limit, budget check, and Prisma context fetch in parallel —
+  // all independent reads.
   let ctx: Awaited<ReturnType<typeof fetchServiceIssueSummaryContext>>;
   try {
-    [, ctx] = await Promise.all([
+    [, , ctx] = await Promise.all([
+      assertRateLimit(session.user.id),
       assertWithinBudget(session.user.id),
       fetchServiceIssueSummaryContext(id),
     ]);
   } catch (err) {
+    if (err instanceof RateLimitedError) {
+      return NextResponse.json(
+        { error: "Too many AI requests. Please wait a few seconds." },
+        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
+      );
+    }
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
         { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
@@ -75,6 +85,7 @@ export async function GET(
     return NextResponse.json({ summary: text });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error("[ai/summary/service-issue] failed:", message);
     await recordUsage({
       userId: session.user.id,
       feature: "summary-service-issue",
@@ -86,7 +97,7 @@ export async function GET(
       errorCode: message.slice(0, 120),
     }).catch(() => {});
     return NextResponse.json(
-      { error: "Summary failed: " + message },
+      { error: "Summary failed. Please retry." },
       { status: 500 },
     );
   }

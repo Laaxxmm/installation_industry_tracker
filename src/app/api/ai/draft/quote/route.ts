@@ -3,9 +3,11 @@ import { z } from "zod";
 import { aiEnabled, extractJson, modelName } from "@/lib/ai/client";
 import { requireSession } from "@/server/rbac";
 import {
+  assertRateLimit,
   assertWithinBudget,
   recordUsage,
   CostBudgetExceededError,
+  RateLimitedError,
 } from "@/lib/ai/cost-guard";
 import {
   QuoteDraftOutput,
@@ -45,14 +47,22 @@ export async function POST(req: Request) {
   }
   const { clientId, brief } = parsed.data;
 
-  // Run budget check and Prisma context fetch in parallel — independent reads.
+  // Run rate limit, budget check, and Prisma context fetch in parallel —
+  // all independent reads.
   let context: Awaited<ReturnType<typeof fetchQuoteContext>>;
   try {
-    [, context] = await Promise.all([
+    [, , context] = await Promise.all([
+      assertRateLimit(session.user.id),
       assertWithinBudget(session.user.id),
       fetchQuoteContext(clientId),
     ]);
   } catch (err) {
+    if (err instanceof RateLimitedError) {
+      return NextResponse.json(
+        { error: "Too many AI requests. Please wait a few seconds." },
+        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
+      );
+    }
     if (err instanceof CostBudgetExceededError) {
       return NextResponse.json(
         { error: `Daily AI budget exceeded (${err.used}/${err.budget} tokens).` },
@@ -93,6 +103,7 @@ export async function POST(req: Request) {
     return NextResponse.json(object);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error("[ai/draft/quote] failed:", message);
     await recordUsage({
       userId: session.user.id,
       feature: "draft-quote",
@@ -104,7 +115,7 @@ export async function POST(req: Request) {
       errorCode: message.slice(0, 120),
     }).catch(() => {});
     return NextResponse.json(
-      { error: "Draft failed: " + message },
+      { error: "Quote draft failed. Please retry." },
       { status: 500 },
     );
   }
