@@ -8,47 +8,67 @@ import { SAB } from "./tokens";
 interface TopBarProps {
   title: ReactNode;
   right?: ReactNode;
+  /**
+   * Callback fired when the mobile hamburger is tapped. Set by
+   * DashboardShell on mobile breakpoints; rendered as a button on
+   * the left of the bar (visible only below `md`).
+   */
+  onMenuClick?: () => void;
 }
 
-export function TopBar({ title, right }: TopBarProps) {
+export function TopBar({ title, right, onMenuClick }: TopBarProps) {
   return (
     <div
+      className="flex h-12 flex-none items-center justify-between gap-2 px-3 md:px-5"
       style={{
-        height: 48,
-        flex: "none",
         borderBottom: `1px solid ${SAB.rule}`,
         background: SAB.card,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 20px",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div className="flex min-w-0 items-center gap-2 md:gap-3.5">
+        {onMenuClick && (
+          // Hamburger button — mobile only. Tapped → DashboardShell opens
+          // the sidebar drawer.
+          <button
+            type="button"
+            aria-label="Open navigation menu"
+            onClick={onMenuClick}
+            className="-ml-1 flex h-9 w-9 flex-none items-center justify-center rounded-md md:hidden"
+            style={{ color: SAB.ink, background: "transparent" }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        )}
+
         <div
-          className="sab-caps"
+          className="hidden sab-caps md:block"
           style={{ fontSize: 10.5, letterSpacing: ".08em" }}
         >
           SAB India
         </div>
-        <div style={{ width: 1, height: 14, background: SAB.rule }} />
         <div
+          className="hidden md:block"
+          style={{ width: 1, height: 14, background: SAB.rule, flex: "none" }}
+        />
+        <div
+          className="truncate text-[13px] font-medium"
           style={{
             fontFamily: "var(--font-sab-sans), Inter Tight, system-ui, sans-serif",
-            fontSize: 13,
-            fontWeight: 500,
             color: SAB.ink,
           }}
         >
           {title}
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+
+      <div className="flex flex-none items-center gap-1.5 md:gap-2">
         <div
+          className="hidden items-center gap-1.5 sm:flex"
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
             padding: "5px 10px",
             border: `1px solid ${SAB.rule}`,
             borderRadius: 4,

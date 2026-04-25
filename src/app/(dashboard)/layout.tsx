@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/server/auth";
-import { Sidebar, TopBar, SignOutButton } from "@/components/sab";
+import { SignOutButton } from "@/components/sab";
+import { DashboardShell } from "@/components/sab/DashboardShell";
 import { AIAssistantLauncher } from "@/components/ai/AIAssistantLauncher";
 import { aiEnabled } from "@/lib/ai/client";
 
@@ -18,30 +19,19 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        background: "var(--sab-paper)",
-        color: "var(--sab-ink)",
-      }}
-    >
-      <Sidebar
+    <>
+      <DashboardShell
         userName={session.user.name ?? "User"}
         userRole={session.user.role ?? "USER"}
-      />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <TopBar
-          title="Operations workspace"
-          right={
-            <form action={handleSignOut}>
-              <SignOutButton />
-            </form>
-          }
-        />
-        <main style={{ flex: 1, padding: "20px 24px", overflowY: "auto" }}>{children}</main>
-      </div>
+        topBarRight={
+          <form action={handleSignOut}>
+            <SignOutButton />
+          </form>
+        }
+      >
+        {children}
+      </DashboardShell>
       {aiEnabled() && <AIAssistantLauncher />}
-    </div>
+    </>
   );
 }

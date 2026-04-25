@@ -193,3 +193,41 @@
     animation: sabPulse 1.4s infinite;
   }
 }
+
+/* ─── Mobile-responsive helpers ─────────────────────────────────────
+ * These rules patch up patterns that pre-date the responsive shell
+ * without forcing every page to be rewritten with breakpoint classes.
+ */
+@layer utilities {
+  /* On screens < 768px:
+   *   - Tables that overflow get horizontally scrolled inside their
+   *     direct parent (we wrap with a scroll container by default).
+   *   - Long inline-styled grids with hardcoded multi-column
+   *     gridTemplateColumns collapse to a single column.
+   */
+  @media (max-width: 767px) {
+    /* Scroll any wide table inside main content. The double wrapper
+       ensures we don't cut off the table's first column. */
+    main table {
+      display: block;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      max-width: 100%;
+    }
+    main table > thead,
+    main table > tbody,
+    main table > tfoot {
+      width: max-content;
+      min-width: 100%;
+      display: table;
+    }
+
+    /* Inline-style 2 / 3 / 4-col grids that didn't get Tailwind
+       breakpoints stack on small screens. Targets the common pattern
+       `style={{display:"grid", gridTemplateColumns:"repeat(N,...)"}}` */
+    main [style*="display: grid"][style*="repeat("],
+    main [style*="display:grid"][style*="repeat("] {
+      grid-template-columns: 1fr !important;
+    }
+  }
+}

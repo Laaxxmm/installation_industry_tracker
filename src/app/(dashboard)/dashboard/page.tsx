@@ -330,13 +330,7 @@ export default async function DashboardPage({
       />
 
       {/* ─── 4 KPIs ─────────────────────────────────────── */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-          gap: 16,
-        }}
-      >
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
         <Link href={fyYear ? `/projects?fy=${istFyLabel(new Date(fyYear, 5, 1))}` : "/projects"} style={{ textDecoration: "none" }}>
           <KPI
             label="Portfolio PO Value"
@@ -417,14 +411,7 @@ export default async function DashboardPage({
       </div>
 
       {/* ─── Billing chart + Action items ──────────────── */}
-      <div
-        style={{
-          marginTop: 16,
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
-          gap: 16,
-        }}
-      >
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
         <div style={{ background: SAB.card, border: `1px solid ${SAB.rule}`, borderRadius: 4, padding: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
             <div>
@@ -499,15 +486,7 @@ export default async function DashboardPage({
       </div>
 
       {/* ─── Work status + Top 5 clients ──────────────── */}
-      <div
-        style={{
-          marginTop: 16,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 16,
-          paddingBottom: 24,
-        }}
-      >
+      <div className="mt-4 grid grid-cols-1 gap-4 pb-6 lg:grid-cols-2">
         <div style={{ background: SAB.card, border: `1px solid ${SAB.rule}`, borderRadius: 4, padding: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: SAB.ink }}>Work status</div>

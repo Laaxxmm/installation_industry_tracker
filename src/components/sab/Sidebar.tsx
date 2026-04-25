@@ -66,6 +66,9 @@ export function Sidebar({ userName, userRole, footer }: SidebarProps) {
 
   return (
     <aside
+      // Positioning is handled by DashboardShell (sticky on desktop, fixed
+      // off-screen drawer on mobile). The aside itself only needs to fill
+      // its container vertically and own its own width.
       style={{
         width,
         flex: "none",
@@ -75,8 +78,6 @@ export function Sidebar({ userName, userRole, footer }: SidebarProps) {
         flexDirection: "column",
         transition: "width .15s",
         height: "100vh",
-        position: "sticky",
-        top: 0,
       }}
     >
       <div
