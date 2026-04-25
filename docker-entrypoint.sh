@@ -73,16 +73,6 @@ else
   echo "==> [2/3] skipping seed (SEED_DB != true)"
 fi
 
-# Refresh Postgres planner statistics. Cheap (<1s on a warm DB) and prevents
-# the planner from picking bad query plans after large data churn — e.g.
-# right after a TRUNCATE / wipe-data run, where pg_class.reltuples is stale.
-echo "==> [2.5/3] ANALYZE (refresh planner stats)"
-set +e
-node node_modules/prisma/build/index.js db execute --stdin <<'SQL'
-ANALYZE;
-SQL
-set -e
-
 echo "==> [3/3] next start on 0.0.0.0:${PORT}"
 # Bypass npm — call next directly so no script arg parsing can interfere.
 exec node node_modules/next/dist/bin/next start --hostname 0.0.0.0 --port "$PORT"
