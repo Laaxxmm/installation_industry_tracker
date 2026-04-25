@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>SAB Tracker</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --ink:   #1f1c18;
+    --ink-3: #6b665d;
+    --rule:  #e6dfd2;
+    --accent:#d97757;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mark {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    background: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .mark svg { width: 32px; height: 32px; }
+  .brand {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .sub {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .card {
+    margin-top: 28px;
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    background: #fff;
+    padding: 20px 18px;
+    max-width: 360px;
+    width: 100%;
+  }
+  h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  p {
+    margin: 8px 0 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-3);
+  }
+  .btn {
+    display: inline-block;
+    margin-top: 18px;
+    padding: 11px 20px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+  .btn:active { filter: brightness(0.95); }
+  .foot {
+    margin-top: 18px;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-3);
+  }
+</style>
+</head>
+<body>
+  <span class="mark" aria-hidden="true">
+    <svg viewBox="0 0 40 40">
+      <path d="M11 25c0-4 3-6 7-6s7-2 7-6" stroke="#fff" stroke-width="2.8" stroke-linecap="round" fill="none" />
+      <circle cx="11" cy="15" r="2.4" fill="#fff" />
+      <circle cx="29" cy="25" r="2.4" fill="#fff" />
+    </svg>
+  </span>
+  <div class="brand">SAB India</div>
+  <div class="sub">Project Tracker</div>
+
+  <div class="card">
+    <h1>Can't reach the server</h1>
+    <p>
+      You're offline, or the SAB Tracker server isn't responding. Connect
+      to the internet and try again.
+    </p>
+    <a class="btn" href="https://pulse.indefine.in/punch">Tap to retry</a>
+  </div>
+
+  <div class="foot">v1.1 · Asia/Kolkata</div>
+</body>
+</html>

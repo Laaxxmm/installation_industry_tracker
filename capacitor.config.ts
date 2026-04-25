@@ -9,12 +9,16 @@ const config: CapacitorConfig = {
   appName: "SAB Tracker",
   webDir: "dist-mobile",
   server: {
-    url: "https://broadcast-toll-resulting-repeat.trycloudflare.com",
+    // Production server. The WebView loads the live Next.js app from this URL
+    // on launch. Custom domain (not the *.up.railway.app placeholder) so the
+    // APK keeps working if we ever migrate hosts — the DNS stays the same.
+    url: "https://pulse.indefine.in",
     androidScheme: "https",
     cleartext: false,
     allowNavigation: [
-      "*.trycloudflare.com",
-      "sab-india-tracker.vercel.app",
+      "pulse.indefine.in",
+      // Wildcard covers any future subdomain (e.g. staging.indefine.in).
+      "*.indefine.in",
     ],
   },
   android: {

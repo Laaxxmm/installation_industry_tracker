@@ -13,7 +13,8 @@ playwright-report/
 out/
 build/
 dist/
-dist-mobile/
+# Note: dist-mobile/ is intentionally NOT ignored — it holds the
+# Capacitor offline-start fallback (index.html) and is version-controlled.
 
 # env
 .env

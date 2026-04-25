@@ -1,0 +1,96 @@
+name: Build Android APK
+
+# Builds an unsigned debug Capacitor APK that points at https://pulse.indefine.in.
+# Triggers:
+#   - every push to main (so the latest commit always has a downloadable APK)
+#   - manual via the Actions tab → Run workflow
+#
+# Output:
+#   - artifact `sab-tracker-debug-apk` (90-day retention)
+#   - download → unzip → `app-debug.apk` → sideload to phones
+#
+# This is a debug build with the auto-generated debug keystore. Not signed
+# for Play Store. See MOBILE.md for sideload instructions; signing for
+# release is documented as future work in the plan file.
+
+on:
+  push:
+    branches: [main]
+    # Only re-build the APK when something the APK actually depends on changes.
+    # Web-app-only changes are picked up at runtime by the WebView — no APK
+    # rebuild needed.
+    paths:
+      - "capacitor.config.ts"
+      - "android/**"
+      - "dist-mobile/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/build-android-apk.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Assemble debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install npm dependencies
+        # `npm ci` is faster + reproducible vs `npm install`. Required for
+        # the `@capacitor/cli` we'll invoke below.
+        run: npm ci
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Set up Android SDK + accept licenses
+        uses: android-actions/setup-android@v3
+        with:
+          # Match android/variables.gradle:
+          #   compileSdkVersion = 36
+          #   targetSdkVersion  = 34
+          api-level: 36
+          build-tools: "36.0.0"
+          accept-android-sdk-licenses: true
+
+      - name: Sync Capacitor → android/
+        # Copies dist-mobile/ assets and capacitor.config.ts settings into
+        # android/app/src/main/. No Next.js build needed because our webDir
+        # is the static fallback — the actual app loads from server.url
+        # at runtime.
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Gradle — assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Confirm APK output
+        run: |
+          ls -la android/app/build/outputs/apk/debug/
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sab-tracker-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 90
+          if-no-files-found: error
