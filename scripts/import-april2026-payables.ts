@@ -241,24 +241,96 @@ async function main() {
   }
   console.log(`  Created ${vendorIdByName.size} vendors.`);
 
-  // ---------- Create one VendorBill per row with Invoice Value > 0 ----------
-  console.log("\nCreating vendor bills (one per row with invoice > 0)...");
-  let billsCreated = 0;
+  // ---------- Create vendor bills ----------
+  // Two bills per vendor (when applicable) so the dashboard's Outstanding
+  // KPI sums correctly:
+  //   1. "Opening balance carry-forward" bill, dated 31 Mar 2026, with
+  //      grandTotal = positive opening balance. amountPaid = April payment
+  //      that exceeded the April invoice (those excess rupees settled
+  //      opening, not the current month).
+  //   2. "April 2026 invoice" bill, dated 1 Apr 2026, with grandTotal =
+  //      Invoice Value and amountPaid capped at the invoice amount.
+  //
+  // Vendors with negative opening balance (we have credit with them) get
+  // no carry-forward bill — the credit is recorded only in vendor notes.
+  // The dashboard would otherwise need a "credit memo" entity, which the
+  // schema doesn't model.
+  const OB_ISSUE = new Date(Date.UTC(2026, 2, 31)); // 31 Mar 2026
+  const OB_DUE = new Date(Date.UTC(2026, 3, 30)); // due 30 Apr (with the rest)
+
+  console.log("\nCreating vendor bills (opening + April invoices)...");
+  let openingBillsCreated = 0;
+  let aprBillsCreated = 0;
   let billsFailed = 0;
-  let billSeq = 1;
+  let obSeq = 1;
+  let aprSeq = 1;
   for (const [name, r] of byVendor) {
+    // -- Allocate the April payment between April invoice and opening --
+    const paidVsApril = Math.min(r.totalPaid, r.invoiceValue);
+    const paidVsOpening =
+      r.opening > 0 ? Math.min(r.totalPaid - paidVsApril, r.opening) : 0;
+
+    // -- Bill 1: Opening balance carry-forward (only if opening > 0) --
+    if (r.opening > 0) {
+      const obNo = `OB-IMP-${String(obSeq).padStart(4, "0")}`;
+      obSeq++;
+      const grand = new Prisma.Decimal(r.opening);
+      const paid = new Prisma.Decimal(paidVsOpening);
+      const status =
+        paidVsOpening >= r.opening
+          ? VendorBillStatus.PAID
+          : VendorBillStatus.APPROVED;
+
+      const dates = [r.pay1Date, r.pay2Date, r.pay3Date].filter(
+        (d): d is Date => d !== null,
+      );
+      const paidAt =
+        status === VendorBillStatus.PAID && dates.length
+          ? new Date(Math.max(...dates.map((d) => d.getTime())))
+          : null;
+
+      const obNotes = [
+        `Opening balance carry-forward as of 1 Apr 2026`,
+        `Aggregate of unpaid bills from prior periods (FY 25-26 and earlier)`,
+        paidVsOpening > 0
+          ? `April payment applied: ${inr(paidVsOpening)}`
+          : `No payment applied in April`,
+      ].join(". ");
+
+      try {
+        await db.vendorBill.create({
+          data: {
+            billNo: obNo,
+            vendorId: vendorIdByName.get(name)!,
+            status,
+            issueDate: OB_ISSUE,
+            dueDate: OB_DUE,
+            subtotal: grand,
+            taxTotal: new Prisma.Decimal(0),
+            grandTotal: grand,
+            amountPaid: paid,
+            paidAt,
+            notes: obNotes,
+          },
+        });
+        openingBillsCreated++;
+      } catch (err) {
+        billsFailed++;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`  FAIL ${obNo} (${name}, opening): ${msg.slice(0, 200)}`);
+      }
+    }
+
+    // -- Bill 2: April 2026 invoice (only if invoiceValue > 0) --
     if (r.invoiceValue <= 0) continue;
 
-    const billNo = `VB-IMP-${String(billSeq).padStart(4, "0")}`;
-    billSeq++;
+    const billNo = `VB-IMP-${String(aprSeq).padStart(4, "0")}`;
+    aprSeq++;
     const grand = new Prisma.Decimal(r.invoiceValue);
-    // Cap amountPaid at grandTotal — any excess paid against this vendor in
-    // April was settling opening balance, not this month's invoice.
-    const paidAgainstThisBill = Math.min(r.totalPaid, r.invoiceValue);
-    const paid = new Prisma.Decimal(paidAgainstThisBill);
+    const paid = new Prisma.Decimal(paidVsApril);
 
     const status =
-      paidAgainstThisBill >= r.invoiceValue
+      paidVsApril >= r.invoiceValue
         ? VendorBillStatus.PAID
         : VendorBillStatus.APPROVED;
 
@@ -286,9 +358,9 @@ async function main() {
         `Pay3 ${inr(r.pay3)}${r.pay3Date ? ` on ${r.pay3Date.toISOString().slice(0, 10)}` : ""}`,
       );
     if (payNotes.length) noteParts.push(payNotes.join(" · "));
-    if (r.totalPaid > r.invoiceValue) {
+    if (paidVsOpening > 0) {
       noteParts.push(
-        `Note: Total Apr payment ${inr(r.totalPaid)} exceeded this invoice; excess ${inr(r.totalPaid - r.invoiceValue)} settled opening balance (see vendor notes)`,
+        `Note: ${inr(paidVsOpening)} of the Apr payment was allocated to the opening-balance bill instead`,
       );
     }
 
@@ -308,14 +380,16 @@ async function main() {
           notes: noteParts.join(". "),
         },
       });
-      billsCreated++;
+      aprBillsCreated++;
     } catch (err) {
       billsFailed++;
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`  FAIL ${billNo} (${name}): ${msg.slice(0, 200)}`);
+      console.error(`  FAIL ${billNo} (${name}, apr): ${msg.slice(0, 200)}`);
     }
   }
-  console.log(`  Vendor bills: ${billsCreated} created, ${billsFailed} failed.`);
+  console.log(
+    `  Opening-balance bills: ${openingBillsCreated} | April invoice bills: ${aprBillsCreated} | failed: ${billsFailed}`,
+  );
 
   // ---------- Final summary ----------
   console.log("\nFinal DB state:");
