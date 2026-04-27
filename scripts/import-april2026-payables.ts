@@ -258,17 +258,70 @@ async function main() {
   const OB_ISSUE = new Date(Date.UTC(2026, 2, 31)); // 31 Mar 2026
   const OB_DUE = new Date(Date.UTC(2026, 3, 30)); // due 30 Apr (with the rest)
 
-  console.log("\nCreating vendor bills (opening + April invoices)...");
+  console.log("\nCreating vendor bills (opening + April invoices + credits)...");
   let openingBillsCreated = 0;
   let aprBillsCreated = 0;
+  let creditBillsCreated = 0;
   let billsFailed = 0;
   let obSeq = 1;
   let aprSeq = 1;
+  let crSeq = 1;
   for (const [name, r] of byVendor) {
     // -- Allocate the April payment between April invoice and opening --
     const paidVsApril = Math.min(r.totalPaid, r.invoiceValue);
     const paidVsOpening =
       r.opening > 0 ? Math.min(r.totalPaid - paidVsApril, r.opening) : 0;
+
+    // -- Bill 0: Vendor-credit carry-forward (only if opening < 0) --
+    // Modelled as a NEGATIVE-grandTotal bill so it subtracts from the
+    // vendor's Outstanding KPI. Schema allows negative Decimal values;
+    // the dashboard sums (grandTotal - amountPaid) and a negative bill
+    // simply offsets positive ones.
+    //
+    // Excess April payment beyond the April invoice goes onto this
+    // bill's amountPaid as a POSITIVE number. That makes
+    // (grandTotal - amountPaid) = (-X) - (+Y) = -(X+Y), i.e. the
+    // credit GROWS by the over-payment — which matches what happens
+    // in real accounting (more pre-payment held with the vendor).
+    if (r.opening < 0) {
+      const crNo = `CR-IMP-${String(crSeq).padStart(4, "0")}`;
+      crSeq++;
+      const grand = new Prisma.Decimal(r.opening); // negative
+      // For vendors with negative opening, any excess April payment
+      // increases the credit balance (deepens the negative).
+      const excess = Math.max(0, r.totalPaid - r.invoiceValue);
+      const paid = new Prisma.Decimal(excess);
+      const crNotes = [
+        "Vendor credit carry-forward as of 1 Apr 2026",
+        `We overpaid this supplier by ${inr(Math.abs(r.opening))} in prior periods`,
+        excess > 0
+          ? `April additional pre-payment: ${inr(excess)} (deepens credit)`
+          : "No additional April activity against credit",
+        "This negative-balance bill reduces the vendor's Outstanding KPI",
+      ].join(". ");
+      try {
+        await db.vendorBill.create({
+          data: {
+            billNo: crNo,
+            vendorId: vendorIdByName.get(name)!,
+            status: VendorBillStatus.APPROVED,
+            issueDate: OB_ISSUE,
+            dueDate: OB_DUE,
+            subtotal: grand,
+            taxTotal: new Prisma.Decimal(0),
+            grandTotal: grand,
+            amountPaid: paid,
+            paidAt: null,
+            notes: crNotes,
+          },
+        });
+        creditBillsCreated++;
+      } catch (err) {
+        billsFailed++;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`  FAIL ${crNo} (${name}, credit): ${msg.slice(0, 200)}`);
+      }
+    }
 
     // -- Bill 1: Opening balance carry-forward (only if opening > 0) --
     if (r.opening > 0) {
@@ -322,9 +375,10 @@ async function main() {
     }
 
     // -- Bill 2: April 2026 invoice (only if invoiceValue > 0) --
-    if (r.invoiceValue <= 0) continue;
-
-    const billNo = `VB-IMP-${String(aprSeq).padStart(4, "0")}`;
+    // Wrapped in a block (not `continue`) so the over-payment check at
+    // the bottom of the loop still fires for vendors with invoice = 0.
+    if (r.invoiceValue > 0) {
+      const billNo = `VB-IMP-${String(aprSeq).padStart(4, "0")}`;
     aprSeq++;
     const grand = new Prisma.Decimal(r.invoiceValue);
     const paid = new Prisma.Decimal(paidVsApril);
@@ -381,14 +435,56 @@ async function main() {
         },
       });
       aprBillsCreated++;
-    } catch (err) {
-      billsFailed++;
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`  FAIL ${billNo} (${name}, apr): ${msg.slice(0, 200)}`);
+      } catch (err) {
+        billsFailed++;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`  FAIL ${billNo} (${name}, apr): ${msg.slice(0, 200)}`);
+      }
+    } // end of `if (r.invoiceValue > 0)` block
+
+    // -- Bill 3: Over-payment credit (only when totalPaid > opening + invoice
+    //    AND opening was non-negative). The leftover after fully paying both
+    //    the opening and April bills represents pre-payment / advance against
+    //    future invoices. Same negative-grandTotal trick as the carry-forward
+    //    credit, so the dashboard's outstanding sums to the correct closing
+    //    balance (which would be negative for these vendors). --
+    if (r.opening >= 0) {
+      const allocated = paidVsApril + paidVsOpening;
+      const overflow = r.totalPaid - allocated;
+      if (overflow > 0.005) {
+        const crNo = `CR-IMP-${String(crSeq).padStart(4, "0")}`;
+        crSeq++;
+        try {
+          await db.vendorBill.create({
+            data: {
+              billNo: crNo,
+              vendorId: vendorIdByName.get(name)!,
+              status: VendorBillStatus.APPROVED,
+              issueDate: APR_END,
+              dueDate: APR_END,
+              subtotal: new Prisma.Decimal(-overflow),
+              taxTotal: new Prisma.Decimal(0),
+              grandTotal: new Prisma.Decimal(-overflow),
+              amountPaid: new Prisma.Decimal(0),
+              paidAt: null,
+              notes: [
+                "Over-payment credit (Apr 2026)",
+                `Vendor was paid ${inr(overflow)} more than opening + April invoice combined`,
+                "Treat as advance for future invoices; reduces vendor's outstanding",
+              ].join(". "),
+            },
+          });
+          creditBillsCreated++;
+        } catch (err) {
+          billsFailed++;
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`  FAIL ${crNo} (${name}, overflow): ${msg.slice(0, 200)}`);
+        }
+      }
     }
   }
   console.log(
-    `  Opening-balance bills: ${openingBillsCreated} | April invoice bills: ${aprBillsCreated} | failed: ${billsFailed}`,
+    `  Credit bills: ${creditBillsCreated} | Opening-balance bills: ${openingBillsCreated} | April invoice bills: ${aprBillsCreated} | failed: ${billsFailed}`,
   );
 
   // ---------- Final summary ----------
