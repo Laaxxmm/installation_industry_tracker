@@ -46,7 +46,7 @@ export default async function InventoryPage({
       db.material.findMany({
         where,
         orderBy: { sku: "asc" },
-        take: 200,
+        take: 2000,
         select: {
           id: true,
           sku: true,
@@ -225,9 +225,9 @@ export default async function InventoryPage({
                 })}
               </tbody>
             </table>
-            {materials.length >= 200 && totalCount > materials.length && (
+            {materials.length >= 2000 && totalCount > materials.length && (
               <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
-                Showing 200 of {totalCount} materials.
+                Showing 2000 of {totalCount} materials. Refine search to see more.
               </div>
             )}
           </CardContent>

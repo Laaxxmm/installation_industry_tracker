@@ -1,22 +1,26 @@
 /* eslint-disable no-console */
 // Imports the "Stock Format.xlsx" into the Material table.
 // Each row → one Material row with:
-//   sku         = "STK-" + zero-padded Sl.No
-//   name        = col "Stock Name" trimmed
-//   unit        = col "Unit" trimmed (defaults to "PCS")
-//   onHandQty   = col "Stock Nos" (0 if blank)
-//   avgUnitCost = col "PRICE"     (0 if blank)
-//   active      = true
+//   sku            = "STK-" + zero-padded Sl.No
+//   name           = col "Stock Name" trimmed
+//   unit           = col "Unit" trimmed (defaults to "PCS")
+//   openingQty     = col "Stock Nos" (0 if blank) — snapshot is the opening balance
+//   onHandQty      = col "Stock Nos" (mirror, kept in sync)
+//   openingAvgCost = col "PRICE" (0 if blank)
+//   avgUnitCost    = col "PRICE" (mirror)
+//   active         = true
 // Idempotent: re-running upserts by sku.
 //
 // Usage: node scripts/import-stock-format.mjs
 //        node scripts/import-stock-format.mjs --dry   (preview only)
+//        IMPORT_FILE='/path/to/file.xlsx' node scripts/import-stock-format.mjs
 
 import ExcelJS from "exceljs";
 import { PrismaClient } from "@prisma/client";
 
 const FILE =
-  "C:/Users/LENOVO/Desktop/Kishore Desktop/OThers/SAB MGPS/PO/Stock Format.xlsx";
+  process.env.IMPORT_FILE ??
+  "C:/Users/LENOVO/Downloads/Stock Format.xlsx";
 
 const db = new PrismaClient();
 
@@ -95,6 +99,8 @@ async function main() {
         sku: r.sku,
         name: r.name,
         unit: r.unit,
+        openingQty: r.qty,
+        openingAvgCost: r.price,
         onHandQty: r.qty,
         avgUnitCost: r.price,
         active: true,
@@ -102,6 +108,8 @@ async function main() {
       update: {
         name: r.name,
         unit: r.unit,
+        openingQty: r.qty,
+        openingAvgCost: r.price,
         onHandQty: r.qty,
         avgUnitCost: r.price,
         active: true,
