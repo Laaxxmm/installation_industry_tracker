@@ -129,12 +129,22 @@ async function main() {
     process.exit(1);
   }
 
+  // Words / phrases that mean "this row is a footer / aggregate, not a real
+  // supplier". The April 2026 sheet has a "Total" row near the bottom whose
+  // column F is the SUM formula of every preceding row — if we don't skip
+  // it, every running total gets doubled.
+  const FOOTER_RE = /^(total|grand\s*total|subtotal|sum|footer)$/i;
+
   const rows: AprilRow[] = [];
   for (let i = headerIdx + 1; i < aoa.length; i++) {
     const r = aoa[i];
     if (!Array.isArray(r)) continue;
     const supplier = trim(r[1]);
     if (!supplier) continue;
+    if (FOOTER_RE.test(supplier)) {
+      console.log(`  Skipping footer/totals row at sheet row ${i + 1}: "${supplier}"`);
+      continue;
+    }
     rows.push({
       supplier,
       purpose: trim(r[2]),
