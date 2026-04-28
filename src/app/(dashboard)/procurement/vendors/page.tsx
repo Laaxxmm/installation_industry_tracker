@@ -5,6 +5,10 @@ import { db } from "@/server/db";
 import { requireSession, hasRole } from "@/server/rbac";
 import { Button } from "@/components/ui/button";
 import { PageHeader, KPI, Pill, Code, inr } from "@/components/sab";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
 
 const CATEGORY_LABEL: Record<string, string> = {
   PIPES: "Pipes",
@@ -26,12 +30,36 @@ const TERMS_LABEL: Record<string, string> = {
   ADVANCE: "Advance",
 };
 
-export default async function VendorsPage() {
+export default async function VendorsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; category?: string }>;
+}) {
   const session = await requireSession();
   const canCreate = hasRole(session, [Role.ADMIN, Role.MANAGER]);
 
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const category = sp.category?.trim() ?? "";
+
+  // Filter clauses translated into Prisma where filters. Search matches
+  // against vendor name OR code (case-insensitive); category narrows by
+  // enum.
+  const where = {
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: "insensitive" as const } },
+            { code: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+    ...(category ? { category: category as never } : {}),
+  };
+
   const [vendors, totalCount, msmeCount] = await Promise.all([
     db.vendor.findMany({
+      where,
       orderBy: [{ active: "desc" }, { name: "asc" }],
       take: 300,
       include: {
@@ -84,6 +112,24 @@ export default async function VendorsPage() {
           value={rowsWithTotals.reduce((a, v) => a + v._count.purchaseOrders, 0)}
           sub="across all vendors"
         />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput current={q} placeholder="Search vendor name or code…" />
+        <TableSelectFilter
+          paramName="category"
+          label="Category"
+          current={category}
+          options={Object.entries(CATEGORY_LABEL).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        {(q || category) && (
+          <span className="text-[11px] text-slate-500">
+            {vendors.length} of {totalCount} vendor{totalCount === 1 ? "" : "s"}
+          </span>
+        )}
       </div>
 
       <div

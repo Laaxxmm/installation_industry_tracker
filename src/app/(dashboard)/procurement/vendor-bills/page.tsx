@@ -1,17 +1,53 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { Role } from "@prisma/client";
+import { Role, VendorBillStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { requireSession, hasRole } from "@/server/rbac";
 import { Button } from "@/components/ui/button";
 import { PageHeader, KPI, Code, inr, fmtDate } from "@/components/sab";
 import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
 
-export default async function VendorBillsPage() {
+const VENDOR_BILL_STATUS_LABELS: Record<VendorBillStatus, string> = {
+  DRAFT: "Draft",
+  PENDING_MATCH: "Pending match",
+  MATCHED: "Matched",
+  DISCREPANCY: "Discrepancy",
+  APPROVED: "Approved",
+  PAID: "Paid",
+  OVERDUE: "Overdue",
+};
+
+export default async function VendorBillsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>;
+}) {
   const session = await requireSession();
   const canCreate = hasRole(session, [Role.ADMIN, Role.MANAGER]);
 
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const status = sp.status?.trim() ?? "";
+
+  const where = {
+    ...(q
+      ? {
+          OR: [
+            { billNo: { contains: q, mode: "insensitive" as const } },
+            { vendorBillNo: { contains: q, mode: "insensitive" as const } },
+            { vendor: { name: { contains: q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
+    ...(status ? { status: status as VendorBillStatus } : {}),
+  };
+
   const bills = await db.vendorBill.findMany({
+    where,
     orderBy: { issueDate: "desc" },
     take: 200,
     include: {
@@ -57,6 +93,28 @@ export default async function VendorBillsPage() {
         <KPI label="Pending 3-way match" value={pending.length} sub="awaiting GRN match" />
         <KPI label="Discrepancy" value={discrepancy.length} sub="amount mismatch" />
         <KPI label="Overdue" value={overdue.length} sub="past due date" />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search bill no, vendor invoice, or supplier…"
+          width={300}
+        />
+        <TableSelectFilter
+          paramName="status"
+          label="Status"
+          current={status}
+          options={Object.entries(VENDOR_BILL_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        {(q || status) && (
+          <span className="text-[11px] text-slate-500">
+            {bills.length} bill{bills.length === 1 ? "" : "s"} matching
+          </span>
+        )}
       </div>
 
       <div

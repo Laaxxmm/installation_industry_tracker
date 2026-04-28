@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { InvoiceStatus, Role } from "@prisma/client";
+import { InvoiceStatus, ProjectStatus, Role } from "@prisma/client";
 import { db } from "@/server/db";
 import { requireSession, hasRole } from "@/server/rbac";
 import { istFyLabel } from "@/lib/time";
@@ -9,21 +9,50 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ProjectsTable, type ProjectRow } from "./ProjectsTable";
 import { ProjectsDashboard } from "./ProjectsDashboard";
 import { ProjectsMainFilter } from "./ProjectsMainFilter";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
+
+const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  DRAFT: "Draft",
+  ACTIVE: "Active",
+  ON_HOLD: "On hold",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
 
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ description?: string }>;
+  searchParams: Promise<{ description?: string; q?: string; status?: string }>;
 }) {
   const session = await requireSession();
   const canCreate = hasRole(session, [Role.ADMIN, Role.MANAGER]);
   const sp = await searchParams;
   const selectedDescription = sp.description ?? "";
+  const q = sp.q?.trim() ?? "";
+  const status = sp.status?.trim() ?? "";
 
-  const where =
-    session.user.role === Role.SUPERVISOR
+  // Combine: supervisor scope + search + status filter.
+  const where = {
+    ...(session.user.role === Role.SUPERVISOR
       ? { siteSupervisorId: session.user.id }
-      : {};
+      : {}),
+    ...(q
+      ? {
+          OR: [
+            { code: { contains: q, mode: "insensitive" as const } },
+            { name: { contains: q, mode: "insensitive" as const } },
+            { poNumber: { contains: q, mode: "insensitive" as const } },
+            { fileNo: { contains: q, mode: "insensitive" as const } },
+            { clientName: { contains: q, mode: "insensitive" as const } },
+            { location: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+    ...(status ? { status: status as ProjectStatus } : {}),
+  };
 
   const [projects, statusGroups, billedSums] = await Promise.all([
     db.project.findMany({
@@ -102,6 +131,27 @@ export default async function ProjectsPage({
           ) : null
         }
       />
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search code, name, PO no, client, location…"
+          width={320}
+        />
+        <TableSelectFilter
+          paramName="status"
+          label="Status"
+          current={status}
+          options={Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        {(q || status) && (
+          <span className="text-[11px] text-slate-500">
+            {rows.length} project{rows.length === 1 ? "" : "s"} match
+          </span>
+        )}
+      </div>
       <ProjectsMainFilter
         options={descriptionOptions}
         current={selectedDescription}

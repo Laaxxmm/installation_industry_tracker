@@ -10,6 +10,17 @@ import { formatINR } from "@/lib/money";
 import { istFyLabel, istFyStart, istFyEnd } from "@/lib/time";
 import { InvoicesTable, type InvoiceRow } from "./InvoicesTable";
 import { InvoicesFyFilter } from "./InvoicesFyFilter";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
+
+const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  DRAFT: "Draft",
+  ISSUED: "Issued",
+  PAID: "Paid",
+  CANCELLED: "Cancelled",
+};
 
 function parseFyLabelToYear(label: string): number | null {
   const m = label.match(/^FY\s+(\d{2})-(\d{2})$/);
@@ -20,12 +31,14 @@ function parseFyLabelToYear(label: string): number | null {
 export default async function InvoicesIndexPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fyLabel?: string }>;
+  searchParams: Promise<{ fyLabel?: string; q?: string; status?: string }>;
 }) {
   await requireRole([Role.ADMIN, Role.MANAGER]);
 
   const sp = await searchParams;
   const selectedFyYear = sp.fyLabel ? parseFyLabelToYear(sp.fyLabel) : null;
+  const q = sp.q?.trim() ?? "";
+  const status = sp.status?.trim() ?? "";
 
   const now = new Date();
   const currentFyYear = istFyStart(now).getUTCFullYear();
@@ -56,6 +69,19 @@ export default async function InvoicesIndexPage({
     oldestInvoiceAgg,
   ] = await Promise.all([
     db.clientInvoice.findMany({
+      where: {
+        ...(q
+          ? {
+              OR: [
+                { invoiceNo: { contains: q, mode: "insensitive" as const } },
+                { client: { name: { contains: q, mode: "insensitive" as const } } },
+                { project: { code: { contains: q, mode: "insensitive" as const } } },
+                { project: { name: { contains: q, mode: "insensitive" as const } } },
+              ],
+            }
+          : {}),
+        ...(status ? { status: status as InvoiceStatus } : {}),
+      },
       orderBy: [{ createdAt: "desc" }],
       take: 500,
       include: {
@@ -210,6 +236,28 @@ export default async function InvoicesIndexPage({
         >
           <StatCard label="Drafts" value={draftTotal} sub="not yet issued" />
         </Link>
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search invoice no, client, or project…"
+          width={300}
+        />
+        <TableSelectFilter
+          paramName="status"
+          label="Status"
+          current={status}
+          options={Object.entries(INVOICE_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        {(q || status) && (
+          <span className="text-[11px] text-slate-500">
+            {rows.length} invoice{rows.length === 1 ? "" : "s"} match
+          </span>
+        )}
       </div>
 
       <InvoicesTable rows={rows} />

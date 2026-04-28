@@ -6,16 +6,34 @@ import { requireSession, hasRole } from "@/server/rbac";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
+import { TableSearchInput } from "@/components/sab/TableFilters";
 
-export default async function ClientsPage() {
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const session = await requireSession();
   const canCreate = hasRole(session, [Role.ADMIN, Role.MANAGER]);
+
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const where = q
+    ? {
+        OR: [
+          { name: { contains: q, mode: "insensitive" as const } },
+          { gstin: { contains: q, mode: "insensitive" as const } },
+          { contactName: { contains: q, mode: "insensitive" as const } },
+        ],
+      }
+    : undefined;
 
   // Capped list of clients + counts in one round-trip. Total client directories
   // rarely exceed a couple hundred rows, but the _count subqueries multiply
   // every row into 3 count queries — so cap at 200 to keep the query bounded.
   const [clients, totalCount, activeCount, withGstin] = await Promise.all([
     db.client.findMany({
+      where,
       orderBy: [{ active: "desc" }, { name: "asc" }],
       take: 200,
       include: {
@@ -54,6 +72,19 @@ export default async function ClientsPage() {
           value={clients.reduce((a, c) => a + c._count.projects, 0)}
           sub="across all clients"
         />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search name, GSTIN, or contact…"
+          width={280}
+        />
+        {q && (
+          <span className="text-[11px] text-slate-500">
+            {clients.length} of {totalCount} client{totalCount === 1 ? "" : "s"}
+          </span>
+        )}
       </div>
 
       <div className="rounded-md border border-slate-200 bg-white shadow-card">
