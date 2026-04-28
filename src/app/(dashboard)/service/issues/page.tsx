@@ -5,6 +5,29 @@ import { db } from "@/server/db";
 import { hasRole, requireSession } from "@/server/rbac";
 import { Button } from "@/components/ui/button";
 import { Code, PageHeader, Pill, fmtDate } from "@/components/sab";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
+
+const SERVICE_STATUS_LABELS: Record<ServiceStatus, string> = {
+  NEW: "New",
+  TRIAGED: "Triaged",
+  ASSIGNED: "Assigned",
+  IN_PROGRESS: "In progress",
+  ON_HOLD: "On hold",
+  RESOLVED: "Resolved",
+  VERIFIED: "Verified",
+  CLOSED: "Closed",
+  CANCELLED: "Cancelled",
+};
+
+const PRIORITY_LABELS: Record<ServicePriority, string> = {
+  P1: "P1 — Critical",
+  P2: "P2 — High",
+  P3: "P3 — Normal",
+  P4: "P4 — Low",
+};
 
 const STATUS_TONE: Record<ServiceStatus, "ink" | "accent" | "amber" | "alert" | "positive" | "blue"> = {
   NEW: "blue",
@@ -32,7 +55,11 @@ const COVERAGE_TONE: Record<ServiceCoverage, "ink" | "accent" | "amber" | "alert
   BILLABLE: "ink",
 };
 
-export default async function ServiceIssuesPage() {
+export default async function ServiceIssuesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string; priority?: string }>;
+}) {
   const session = await requireSession();
   const canCreate = hasRole(session, [
     Role.ADMIN,
@@ -41,7 +68,25 @@ export default async function ServiceIssuesPage() {
     Role.EMPLOYEE,
   ]);
 
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const status = sp.status?.trim() ?? "";
+  const priority = sp.priority?.trim() ?? "";
+
   const issues = await db.serviceIssue.findMany({
+    where: {
+      ...(q
+        ? {
+            OR: [
+              { ticketNo: { contains: q, mode: "insensitive" as const } },
+              { summary: { contains: q, mode: "insensitive" as const } },
+              { client: { name: { contains: q, mode: "insensitive" as const } } },
+            ],
+          }
+        : {}),
+      ...(status ? { status: status as ServiceStatus } : {}),
+      ...(priority ? { priority: priority as ServicePriority } : {}),
+    },
     orderBy: [{ status: "asc" }, { reportedAt: "desc" }],
     take: 300,
     include: {
@@ -66,6 +111,37 @@ export default async function ServiceIssuesPage() {
           ) : null
         }
       />
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search ticket no, summary, or client…"
+          width={300}
+        />
+        <TableSelectFilter
+          paramName="status"
+          label="Status"
+          current={status}
+          options={Object.entries(SERVICE_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        <TableSelectFilter
+          paramName="priority"
+          label="Priority"
+          current={priority}
+          options={Object.entries(PRIORITY_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        {(q || status || priority) && (
+          <span className="text-[11px] text-slate-500">
+            {issues.length} ticket{issues.length === 1 ? "" : "s"} match
+          </span>
+        )}
+      </div>
 
       <div
         className="overflow-hidden rounded border"

@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { Role } from "@prisma/client";
+import { EmploymentType, Role } from "@prisma/client";
 import { db } from "@/server/db";
 import { requireRole } from "@/server/rbac";
 import { formatINR } from "@/lib/money";
@@ -14,12 +14,35 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { NewRateForm } from "./NewRateForm";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
 
-export default async function AdminRatesPage() {
+export default async function AdminRatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; type?: string }>;
+}) {
   await requireRole([Role.ADMIN]);
 
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const type = sp.type?.trim() ?? "";
+
   const employees = await db.user.findMany({
-    where: { role: "EMPLOYEE" },
+    where: {
+      role: "EMPLOYEE",
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" as const } },
+              { email: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+      ...(type ? { employmentType: type as EmploymentType } : {}),
+    },
     include: { rateCards: { orderBy: { effectiveFrom: "desc" } } },
     orderBy: { name: "asc" },
   });
@@ -64,6 +87,28 @@ export default async function AdminRatesPage() {
           value={employees.filter((e) => !e.employmentType).length}
           sub="Set before rates"
         />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search employee name or email…"
+          width={260}
+        />
+        <TableSelectFilter
+          paramName="type"
+          label="Type"
+          current={type}
+          options={[
+            { value: "HOURLY", label: "Hourly" },
+            { value: "SALARIED", label: "Salaried" },
+          ]}
+        />
+        {(q || type) && (
+          <span className="text-[11px] text-slate-500">
+            {employees.length} employee{employees.length === 1 ? "" : "s"} match
+          </span>
+        )}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">

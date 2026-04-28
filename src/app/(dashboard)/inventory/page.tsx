@@ -10,9 +10,33 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { NewMaterialForm } from "./NewMaterialForm";
 import { EditMaterialButton } from "./EditMaterialButton";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
 
-export default async function InventoryPage() {
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; active?: string }>;
+}) {
   await requireRole([Role.ADMIN, Role.MANAGER, Role.SUPERVISOR]);
+
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const active = sp.active?.trim() ?? "";
+
+  const where = {
+    ...(q
+      ? {
+          OR: [
+            { sku: { contains: q, mode: "insensitive" as const } },
+            { name: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+    ...(active === "true" ? { active: true } : active === "false" ? { active: false } : {}),
+  };
 
   // Cap the table and compute portfolio-wide rollups with counts so big SKU
   // libraries (hundreds of rows) don't ship all rows to the client just to
@@ -20,6 +44,7 @@ export default async function InventoryPage() {
   const [materials, totalCount, activeSkus, lowStock, receiptSums, issueSums] =
     await Promise.all([
       db.material.findMany({
+        where,
         orderBy: { sku: "asc" },
         take: 200,
         select: {
@@ -97,6 +122,28 @@ export default async function InventoryPage() {
           delta={lowStock > 0 ? "Review" : "All good"}
           sub="< 10 units on hand"
         />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search SKU or name…"
+          width={260}
+        />
+        <TableSelectFilter
+          paramName="active"
+          label="Status"
+          current={active}
+          options={[
+            { value: "true", label: "Active" },
+            { value: "false", label: "Archived" },
+          ]}
+        />
+        {(q || active) && (
+          <span className="text-[11px] text-slate-500">
+            {materials.length} SKU{materials.length === 1 ? "" : "s"} match
+          </span>
+        )}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">

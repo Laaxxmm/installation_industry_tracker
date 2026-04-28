@@ -1,13 +1,47 @@
 import Link from "next/link";
+import { GRNStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { requireSession } from "@/server/rbac";
 import { PageHeader, KPI, Code, fmtDate } from "@/components/sab";
 import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
 
-export default async function GRNsPage() {
+const GRN_STATUS_LABELS: Record<GRNStatus, string> = {
+  DRAFT: "Draft",
+  ACCEPTED: "Accepted",
+  PARTIALLY_ACCEPTED: "Partially accepted",
+  REJECTED: "Rejected",
+};
+
+export default async function GRNsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>;
+}) {
   await requireSession();
 
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const status = sp.status?.trim() ?? "";
+
+  const where = {
+    ...(q
+      ? {
+          OR: [
+            { grnNo: { contains: q, mode: "insensitive" as const } },
+            { po: { poNo: { contains: q, mode: "insensitive" as const } } },
+            { po: { vendor: { name: { contains: q, mode: "insensitive" as const } } } },
+          ],
+        }
+      : {}),
+    ...(status ? { status: status as GRNStatus } : {}),
+  };
+
   const grns = await db.gRN.findMany({
+    where,
     orderBy: { receivedAt: "desc" },
     take: 200,
     include: {
@@ -44,6 +78,28 @@ export default async function GRNsPage() {
         <KPI label="Accepted in full" value={accepted} sub="clean receipts" accent />
         <KPI label="Partially accepted" value={partial} sub="short/rejected qty" />
         <KPI label="This week" value={thisWeek} sub="last 7 days" />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search GRN no, PO, or vendor…"
+          width={300}
+        />
+        <TableSelectFilter
+          paramName="status"
+          label="Status"
+          current={status}
+          options={Object.entries(GRN_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        {(q || status) && (
+          <span className="text-[11px] text-slate-500">
+            {grns.length} GRN{grns.length === 1 ? "" : "s"} match
+          </span>
+        )}
       </div>
 
       <div

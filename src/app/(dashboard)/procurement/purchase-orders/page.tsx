@@ -1,17 +1,55 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { Role } from "@prisma/client";
+import { Role, VendorPOStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { requireSession, hasRole } from "@/server/rbac";
 import { Button } from "@/components/ui/button";
 import { PageHeader, KPI, Code, inr, fmtDate } from "@/components/sab";
 import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
 
-export default async function PurchaseOrdersPage() {
+const PO_STATUS_LABELS: Record<VendorPOStatus, string> = {
+  DRAFT: "Draft",
+  PENDING_APPROVAL: "Pending approval",
+  APPROVED: "Approved",
+  SENT: "Sent",
+  PARTIALLY_RECEIVED: "Partially received",
+  RECEIVED: "Received",
+  CLOSED: "Closed",
+  CANCELLED: "Cancelled",
+};
+
+export default async function PurchaseOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>;
+}) {
   const session = await requireSession();
   const canCreate = hasRole(session, [Role.ADMIN, Role.MANAGER]);
 
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const status = sp.status?.trim() ?? "";
+
+  const where = {
+    ...(q
+      ? {
+          OR: [
+            { poNo: { contains: q, mode: "insensitive" as const } },
+            { vendor: { name: { contains: q, mode: "insensitive" as const } } },
+            { project: { code: { contains: q, mode: "insensitive" as const } } },
+            { project: { name: { contains: q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
+    ...(status ? { status: status as VendorPOStatus } : {}),
+  };
+
   const pos = await db.vendorPO.findMany({
+    where,
     orderBy: { issueDate: "desc" },
     take: 200,
     include: {
@@ -62,6 +100,28 @@ export default async function PurchaseOrdersPage() {
           sub="sent to vendor"
         />
         <KPI label="This month" value={inr(thisMonthValue)} sub="PO value raised" />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search PO no, vendor, or project…"
+          width={300}
+        />
+        <TableSelectFilter
+          paramName="status"
+          label="Status"
+          current={status}
+          options={Object.entries(PO_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        {(q || status) && (
+          <span className="text-[11px] text-slate-500">
+            {pos.length} PO{pos.length === 1 ? "" : "s"} match
+          </span>
+        )}
       </div>
 
       <div

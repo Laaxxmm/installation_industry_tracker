@@ -4,6 +4,7 @@ import { requireRole } from "@/server/rbac";
 import { PageHeader } from "@/components/ui/page-header";
 import { TimesheetsTable, type TimesheetEntry } from "./TimesheetsTable";
 import { TimesheetsStatusFilter } from "./TimesheetsStatusFilter";
+import { TableSearchInput } from "@/components/sab/TableFilters";
 
 const VALID_STATUS = new Set([
   "SUBMITTED",
@@ -15,7 +16,7 @@ const VALID_STATUS = new Set([
 export default async function TimesheetsApprovalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; q?: string }>;
 }) {
   const session = await requireRole([
     Role.ADMIN,
@@ -28,6 +29,7 @@ export default async function TimesheetsApprovalPage({
     rawStatus && VALID_STATUS.has(rawStatus as typeof VALID_STATUS extends Set<infer T> ? T : never)
       ? rawStatus
       : "SUBMITTED";
+  const q = sp.q?.trim() ?? "";
 
   const statusWhere =
     statusFilter === "ALL"
@@ -42,11 +44,26 @@ export default async function TimesheetsApprovalPage({
         }
       : { status: statusFilter as TimeEntryStatus };
 
+  const searchWhere = q
+    ? {
+        OR: [
+          { employee: { name: { contains: q, mode: "insensitive" as const } } },
+          { project: { code: { contains: q, mode: "insensitive" as const } } },
+          { project: { name: { contains: q, mode: "insensitive" as const } } },
+          { note: { contains: q, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
+
   const entries = await db.timeEntry.findMany({
     where:
       session.user.role === Role.SUPERVISOR
-        ? { ...statusWhere, project: { siteSupervisorId: session.user.id } }
-        : statusWhere,
+        ? {
+            ...statusWhere,
+            ...searchWhere,
+            project: { siteSupervisorId: session.user.id },
+          }
+        : { ...statusWhere, ...searchWhere },
     orderBy: { clockIn: "desc" },
     take: 200,
     select: {
@@ -104,6 +121,19 @@ export default async function TimesheetsApprovalPage({
         description={headerBody}
         actions={<TimesheetsStatusFilter current={statusFilter} />}
       />
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search employee, project, or note…"
+          width={300}
+        />
+        {q && (
+          <span className="text-[11px] text-slate-500">
+            {entries.length} entr{entries.length === 1 ? "y" : "ies"} match
+          </span>
+        )}
+      </div>
 
       <div className="rounded-md border border-slate-200 bg-white shadow-card">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">

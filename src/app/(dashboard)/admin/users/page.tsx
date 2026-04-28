@@ -13,6 +13,17 @@ import { StatCard } from "@/components/ui/stat-card";
 import { NewUserForm } from "./NewUserForm";
 import { UserActions } from "./UserActions";
 import { EditUserButton } from "./EditUserButton";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
+
+const ROLE_LABELS: Record<Role, string> = {
+  ADMIN: "Admin",
+  MANAGER: "Manager",
+  SUPERVISOR: "Supervisor",
+  EMPLOYEE: "Employee",
+};
 
 const ROLE_STYLES: Record<string, string> = {
   ADMIN: "bg-brand/10 text-brand border-brand/30",
@@ -21,10 +32,36 @@ const ROLE_STYLES: Record<string, string> = {
   EMPLOYEE: "bg-slate-100 text-slate-700 border-slate-300",
 };
 
-export default async function AdminUsersPage() {
+export default async function AdminUsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; role?: string; active?: string }>;
+}) {
   await requireRole([Role.ADMIN]);
 
-  const users = await db.user.findMany({ orderBy: { createdAt: "asc" } });
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const roleFilter = sp.role?.trim() ?? "";
+  const activeFilter = sp.active?.trim() ?? "";
+
+  const where = {
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: "insensitive" as const } },
+            { email: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+    ...(roleFilter ? { role: roleFilter as Role } : {}),
+    ...(activeFilter === "true"
+      ? { active: true }
+      : activeFilter === "false"
+        ? { active: false }
+        : {}),
+  };
+
+  const users = await db.user.findMany({ where, orderBy: { createdAt: "asc" } });
 
   const active = users.filter((u) => u.active).length;
   const byRole = users.reduce<Record<string, number>>((acc, u) => {
@@ -61,6 +98,37 @@ export default async function AdminUsersPage() {
           value={(byRole.SUPERVISOR ?? 0) + (byRole.EMPLOYEE ?? 0)}
           sub={`${byRole.SUPERVISOR ?? 0} supervisors · ${byRole.EMPLOYEE ?? 0} employees`}
         />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search name or email…"
+          width={260}
+        />
+        <TableSelectFilter
+          paramName="role"
+          label="Role"
+          current={roleFilter}
+          options={Object.entries(ROLE_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        <TableSelectFilter
+          paramName="active"
+          label="Status"
+          current={activeFilter}
+          options={[
+            { value: "true", label: "Active" },
+            { value: "false", label: "Disabled" },
+          ]}
+        />
+        {(q || roleFilter || activeFilter) && (
+          <span className="text-[11px] text-slate-500">
+            {users.length} user{users.length === 1 ? "" : "s"} match
+          </span>
+        )}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">

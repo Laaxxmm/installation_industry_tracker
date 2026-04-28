@@ -10,9 +10,46 @@ import { formatINR } from "@/lib/money";
 import { formatIST } from "@/lib/time";
 import { QuoteStatusPill } from "./QuoteStatusPill";
 import { ExpireStaleButton } from "./ExpireStaleButton";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
 
-export default async function QuotesPage() {
+const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+  DRAFT: "Draft",
+  SENT: "Sent",
+  CHANGES_REQUESTED: "Changes requested",
+  REVISED: "Revised",
+  NEGOTIATING: "Negotiating",
+  ACCEPTED: "Accepted",
+  CONVERTED: "Converted",
+  LOST: "Lost",
+  EXPIRED: "Expired",
+};
+
+export default async function QuotesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>;
+}) {
   await requireRole([Role.ADMIN, Role.MANAGER]);
+
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const status = sp.status?.trim() ?? "";
+
+  const where = {
+    ...(q
+      ? {
+          OR: [
+            { quoteNo: { contains: q, mode: "insensitive" as const } },
+            { title: { contains: q, mode: "insensitive" as const } },
+            { client: { name: { contains: q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
+    ...(status ? { status: status as QuoteStatus } : {}),
+  };
 
   const OPEN_STATUSES: QuoteStatus[] = [
     QuoteStatus.DRAFT,
@@ -27,6 +64,7 @@ export default async function QuotesPage() {
   // run in Postgres so we don't drag every Quote row back just to group & sum.
   const [quotes, statusGroups, openPipelineAgg] = await Promise.all([
     db.quote.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       take: 100,
       include: { client: { select: { name: true } } },
@@ -80,6 +118,28 @@ export default async function QuotesPage() {
         <StatCard label="Sent" value={counts.sent} sub="Awaiting client" />
         <StatCard label="In negotiation" value={counts.negotiating} sub="Action needed" />
         <StatCard label="Converted" value={counts.converted} sub="Became projects" />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search quote no, title, or client…"
+          width={300}
+        />
+        <TableSelectFilter
+          paramName="status"
+          label="Status"
+          current={status}
+          options={Object.entries(QUOTE_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        {(q || status) && (
+          <span className="text-[11px] text-slate-500">
+            {quotes.length} quote{quotes.length === 1 ? "" : "s"} match
+          </span>
+        )}
       </div>
 
       <div className="rounded-md border border-slate-200 bg-white shadow-card">

@@ -5,6 +5,20 @@ import { db } from "@/server/db";
 import { hasRole, requireSession } from "@/server/rbac";
 import { Button } from "@/components/ui/button";
 import { Code, KPI, PageHeader, Pill, fmtDate, inr } from "@/components/sab";
+import {
+  TableSearchInput,
+  TableSelectFilter,
+} from "@/components/sab/TableFilters";
+
+const AMC_STATUS_LABELS: Record<AMCStatus, string> = {
+  DRAFT: "Draft",
+  PENDING_APPROVAL: "Pending approval",
+  ACTIVE: "Active",
+  ON_HOLD: "On hold",
+  EXPIRED: "Expired",
+  CANCELLED: "Cancelled",
+  RENEWED: "Renewed",
+};
 
 const STATUS_TONE: Record<AMCStatus, "ink" | "accent" | "amber" | "alert" | "positive" | "blue"> = {
   DRAFT: "ink",
@@ -22,9 +36,30 @@ const BILLING_LABEL = {
   PER_VISIT: "Per-visit",
 };
 
-export default async function AMCListPage() {
+export default async function AMCListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>;
+}) {
   const session = await requireSession();
   const canCreate = hasRole(session, [Role.ADMIN, Role.MANAGER]);
+
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const status = sp.status?.trim() ?? "";
+
+  const amcWhere = {
+    ...(q
+      ? {
+          OR: [
+            { contractNo: { contains: q, mode: "insensitive" as const } },
+            { title: { contains: q, mode: "insensitive" as const } },
+            { client: { name: { contains: q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
+    ...(status ? { status: status as AMCStatus } : {}),
+  };
 
   const now = new Date();
   const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -37,6 +72,7 @@ export default async function AMCListPage() {
 
   const [amcs, activeCount, expiringCount, visitsThisWeek, bookedYTD] = await Promise.all([
     db.aMC.findMany({
+      where: amcWhere,
       orderBy: [{ status: "asc" }, { endDate: "asc" }],
       take: 300,
       include: {
@@ -86,6 +122,28 @@ export default async function AMCListPage() {
           value={inr(Number(bookedYTD._sum.grandTotal ?? 0))}
           sub="Booked since April 1"
         />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <TableSearchInput
+          current={q}
+          placeholder="Search contract no, title, or client…"
+          width={300}
+        />
+        <TableSelectFilter
+          paramName="status"
+          label="Status"
+          current={status}
+          options={Object.entries(AMC_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        {(q || status) && (
+          <span className="text-[11px] text-slate-500">
+            {amcs.length} contract{amcs.length === 1 ? "" : "s"} match
+          </span>
+        )}
       </div>
 
       <div
