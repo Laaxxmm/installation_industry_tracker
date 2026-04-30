@@ -18,13 +18,13 @@ import {
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; active?: string }>;
+  searchParams: Promise<{ q?: string; status?: string }>;
 }) {
   await requireRole([Role.ADMIN, Role.MANAGER, Role.SUPERVISOR]);
 
   const sp = await searchParams;
   const q = sp.q?.trim() ?? "";
-  const active = sp.active?.trim() ?? "";
+  const status = sp.status?.trim() ?? "";
 
   const where = {
     ...(q
@@ -35,7 +35,11 @@ export default async function InventoryPage({
           ],
         }
       : {}),
-    ...(active === "true" ? { active: true } : active === "false" ? { active: false } : {}),
+    ...(status === "active"
+      ? { active: true }
+      : status === "archived"
+        ? { active: false }
+        : {}),
   };
 
   // Cap the table and compute portfolio-wide rollups with counts so big SKU
@@ -131,15 +135,15 @@ export default async function InventoryPage({
           width={260}
         />
         <TableSelectFilter
-          paramName="active"
+          paramName="status"
           label="Status"
-          current={active}
+          current={status}
           options={[
-            { value: "true", label: "Active" },
-            { value: "false", label: "Archived" },
+            { value: "active", label: "Active" },
+            { value: "archived", label: "Archived" },
           ]}
         />
-        {(q || active) && (
+        {(q || status) && (
           <span className="text-[11px] text-slate-500">
             {materials.length} SKU{materials.length === 1 ? "" : "s"} match
           </span>

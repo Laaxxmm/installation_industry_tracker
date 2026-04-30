@@ -66,7 +66,7 @@ export default async function QuotesPage({
     db.quote.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: 200,
       include: { client: { select: { name: true } } },
     }),
     db.quote.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -207,9 +207,9 @@ export default async function QuotesPage({
             ))}
           </tbody>
         </table>
-        {quotes.length >= 100 && totalQuoteCount > quotes.length && (
+        {quotes.length >= 200 && totalQuoteCount > quotes.length && (
           <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
-            Showing the 100 most recent quotes ({totalQuoteCount} total).
+            Showing the 200 most recent quotes ({totalQuoteCount} total). Refine search to see more.
           </div>
         )}
       </div>

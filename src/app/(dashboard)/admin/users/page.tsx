@@ -61,11 +61,16 @@ export default async function AdminUsersPage({
         : {}),
   };
 
-  const users = await db.user.findMany({ where, orderBy: { createdAt: "asc" } });
-
-  const active = users.filter((u) => u.active).length;
-  const byRole = users.reduce<Record<string, number>>((acc, u) => {
-    acc[u.role] = (acc[u.role] ?? 0) + 1;
+  // Capped list for the table + portfolio-wide aggregates for the stat cards,
+  // so growing past 200 users doesn't make the stats lie.
+  const [users, totalCount, activeCount, roleGroups] = await Promise.all([
+    db.user.findMany({ where, orderBy: { createdAt: "asc" }, take: 200 }),
+    db.user.count(),
+    db.user.count({ where: { active: true } }),
+    db.user.groupBy({ by: ["role"], _count: { _all: true } }),
+  ]);
+  const byRole = roleGroups.reduce<Record<string, number>>((acc, g) => {
+    acc[g.role] = g._count._all;
     return acc;
   }, {});
 
@@ -80,8 +85,8 @@ export default async function AdminUsersPage({
       <div className="mb-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total users"
-          value={users.length}
-          sub={`${active} active`}
+          value={totalCount}
+          sub={`${activeCount} active`}
         />
         <StatCard
           label="Admins"
@@ -135,7 +140,7 @@ export default async function AdminUsersPage({
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Directory</CardTitle>
-            <CardDescription>{users.length} users registered</CardDescription>
+            <CardDescription>{totalCount} users registered</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <table className="w-full text-[13px]">
@@ -203,6 +208,11 @@ export default async function AdminUsersPage({
                 ))}
               </tbody>
             </table>
+            {users.length >= 200 && totalCount > users.length && (
+              <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
+                Showing 200 of {totalCount} users. Refine search to see more.
+              </div>
+            )}
           </CardContent>
         </Card>
 

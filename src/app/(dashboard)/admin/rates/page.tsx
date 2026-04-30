@@ -30,6 +30,11 @@ export default async function AdminRatesPage({
   const q = sp.q?.trim() ?? "";
   const type = sp.type?.trim() ?? "";
 
+  // Intentionally uncapped: this admin-only page computes 4 stat cards from
+  // `employees` *and* feeds the new-rate-card form's employee dropdown. A
+  // `take` would make those stats lie above the cap. EMPLOYEE-role users are
+  // expected to be < 100 in practice; if we ever scale past a few hundred we
+  // should split into a capped table query + lightweight count aggregates.
   const employees = await db.user.findMany({
     where: {
       role: "EMPLOYEE",
