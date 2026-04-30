@@ -30,15 +30,31 @@ export default async function BudgetPage({
   const { id } = await params;
   const session = await requireSession();
 
-  const project = await db.project.findUnique({
-    where: { id },
-    include: {
-      budgetLines: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
-    },
-  });
+  const [project, materials] = await Promise.all([
+    db.project.findUnique({
+      where: { id },
+      include: {
+        budgetLines: {
+          orderBy: [{ category: "asc" }, { createdAt: "asc" }],
+          include: { material: { select: { sku: true } } },
+        },
+      },
+    }),
+    db.material.findMany({
+      where: { active: true },
+      select: { id: true, sku: true, name: true, unit: true, avgUnitCost: true },
+      orderBy: { sku: "asc" },
+      take: 2000,
+    }),
+  ]);
   if (!project) notFound();
 
   const canEdit = hasRole(session, [Role.ADMIN, Role.MANAGER]);
+
+  // Stat: how many MATERIAL budget lines are linked to a SKU? Shown so the
+  // PM knows how much of their material budget is auto-approval-ready.
+  const materialLines = project.budgetLines.filter((l) => l.category === "MATERIAL");
+  const linkedMaterialLines = materialLines.filter((l) => l.materialId).length;
 
   const grouped = {
     MATERIAL: project.budgetLines.filter((l) => l.category === "MATERIAL"),
@@ -70,7 +86,15 @@ export default async function BudgetPage({
       <ProjectTabs projectId={id} />
 
       <div className="mt-5 mb-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Material" value={formatINR(totals.MATERIAL)} />
+        <StatCard
+          label="Material"
+          value={formatINR(totals.MATERIAL)}
+          sub={
+            materialLines.length > 0
+              ? `${linkedMaterialLines}/${materialLines.length} linked to SKU`
+              : undefined
+          }
+        />
         <StatCard label="Labor" value={formatINR(totals.LABOR)} />
         <StatCard label="Other" value={formatINR(totals.OTHER)} />
         <StatCard label="Grand total" value={formatINR(grandTotal)} />
@@ -117,6 +141,14 @@ export default async function BudgetPage({
                       </td>
                       <td className="px-2 py-2.5 text-slate-800">
                         {line.description}
+                        {line.material && (
+                          <span
+                            className="ml-2 inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-700"
+                            title="Linked to material — indents auto-approve up to budget qty"
+                          >
+                            🔗 {line.material.sku}
+                          </span>
+                        )}
                       </td>
                       <td className="px-2 py-2.5 text-right tabular-nums text-slate-700">
                         {line.quantity.toString()}
@@ -176,7 +208,16 @@ export default async function BudgetPage({
               <CardTitle>Add budget line</CardTitle>
             </CardHeader>
             <CardContent>
-              <BudgetLineForm projectId={id} />
+              <BudgetLineForm
+                projectId={id}
+                materials={materials.map((m) => ({
+                  id: m.id,
+                  sku: m.sku,
+                  name: m.name,
+                  unit: m.unit,
+                  avgUnitCost: m.avgUnitCost.toString(),
+                }))}
+              />
             </CardContent>
           </Card>
         </div>

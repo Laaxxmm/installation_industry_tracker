@@ -8,14 +8,47 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { upsertBudgetLine } from "@/server/actions/budgets";
 
-export function BudgetLineForm({ projectId }: { projectId: string }) {
+type MaterialOption = {
+  id: string;
+  sku: string;
+  name: string;
+  unit: string;
+  avgUnitCost: string;
+};
+
+export function BudgetLineForm({
+  projectId,
+  materials,
+}: {
+  projectId: string;
+  materials: MaterialOption[];
+}) {
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
     category: "MATERIAL" as "MATERIAL" | "LABOR" | "OTHER",
     description: "",
+    materialId: "",
     quantity: "",
     unitCost: "",
   });
+
+  function pickMaterial(materialId: string) {
+    if (!materialId) {
+      setForm((f) => ({ ...f, materialId: "" }));
+      return;
+    }
+    const m = materials.find((x) => x.id === materialId);
+    if (!m) return;
+    setForm((f) => ({
+      ...f,
+      materialId,
+      // Pre-fill description with the material name if blank, so the line
+      // is informative without forcing the user to retype. They can edit.
+      description: f.description || `${m.sku} · ${m.name}`,
+      // Pre-fill unit cost from the moving average if blank.
+      unitCost: f.unitCost || m.avgUnitCost,
+    }));
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,26 +58,45 @@ export function BudgetLineForm({ projectId }: { projectId: string }) {
           projectId,
           category: form.category,
           description: form.description,
+          materialId: form.materialId || null,
           quantity: form.quantity,
           unitCost: form.unitCost,
         });
-        toast.success("Budget line saved");
-        setForm({ category: "MATERIAL", description: "", quantity: "", unitCost: "" });
+        toast.success(
+          form.materialId
+            ? "Budget line saved (linked to material)"
+            : "Budget line saved",
+        );
+        setForm({
+          category: "MATERIAL",
+          description: "",
+          materialId: "",
+          quantity: "",
+          unitCost: "",
+        });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Save failed");
       }
     });
   }
 
+  const isMaterial = form.category === "MATERIAL";
+
   return (
-    <form onSubmit={submit} className="grid gap-3 md:grid-cols-5 md:items-end">
+    <form onSubmit={submit} className="grid gap-3 md:grid-cols-6 md:items-end">
       <div>
         <Label htmlFor="category">Category</Label>
         <Select
           id="category"
           value={form.category}
           onChange={(e) =>
-            setForm((f) => ({ ...f, category: e.target.value as typeof f.category }))
+            setForm((f) => ({
+              ...f,
+              category: e.target.value as typeof f.category,
+              // Switching away from MATERIAL clears the link.
+              materialId:
+                e.target.value === "MATERIAL" ? f.materialId : "",
+            }))
           }
         >
           <option value="MATERIAL">Material</option>
@@ -52,7 +104,26 @@ export function BudgetLineForm({ projectId }: { projectId: string }) {
           <option value="OTHER">Other</option>
         </Select>
       </div>
-      <div className="md:col-span-2">
+      {isMaterial && (
+        <div className="md:col-span-2">
+          <Label htmlFor="material">
+            Material <span className="font-normal text-slate-500">(optional, enables auto-approval)</span>
+          </Label>
+          <Select
+            id="material"
+            value={form.materialId}
+            onChange={(e) => pickMaterial(e.target.value)}
+          >
+            <option value="">— Free-text only —</option>
+            {materials.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.sku} · {m.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+      <div className={isMaterial ? "md:col-span-3" : "md:col-span-2"}>
         <Label htmlFor="description">Description</Label>
         <Input
           id="description"
@@ -83,7 +154,7 @@ export function BudgetLineForm({ projectId }: { projectId: string }) {
           onChange={(e) => setForm((f) => ({ ...f, unitCost: e.target.value }))}
         />
       </div>
-      <div className="md:col-span-5">
+      <div className="md:col-span-6">
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : "Add line"}
         </Button>

@@ -28,6 +28,10 @@ export const BudgetLineInput = z.object({
   projectId: z.string(),
   category: z.enum(["MATERIAL", "LABOR", "OTHER"]),
   description: z.string().min(1),
+  // Optional binding to a Material SKU — only meaningful when
+  // category === "MATERIAL". When set, indents for that material count
+  // against this line's quantity for the in-budget check.
+  materialId: z.string().nullable().optional(),
   quantity: decimalString,
   unitCost: decimalString,
 });
