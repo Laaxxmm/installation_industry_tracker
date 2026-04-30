@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Role, TimeEntryStatus } from "@prisma/client";
+import { Role } from "@prisma/client";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import { startOfWeek } from "date-fns";
 import { db } from "@/server/db";
