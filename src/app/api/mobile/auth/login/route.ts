@@ -7,6 +7,7 @@ import {
   mobileError,
   signAccessToken,
 } from "@/server/mobile-auth";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,21 @@ const bodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    // IP-keyed first, before we even parse the body — stops a sprayer
+    // from making us do the JSON.parse + Zod work on every shot.
+    const ipLimit = rateLimit(`mob-login:ip:${clientIp(req)}`, 10, 60_000);
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Try again shortly." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(ipLimit.retryAfterMs / 1000)),
+          },
+        },
+      );
+    }
+
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -26,6 +42,21 @@ export async function POST(req: NextRequest) {
       );
     }
     const { email, password, deviceId } = parsed.data;
+
+    // Email-keyed limit: stops credential brute-force against a known account
+    // even if the attacker rotates IPs.
+    const emailLimit = rateLimit(`mob-login:email:${email.toLowerCase()}`, 5, 60_000);
+    if (!emailLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts for this account. Try again shortly." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(emailLimit.retryAfterMs / 1000)),
+          },
+        },
+      );
+    }
 
     const user = await db.user.findUnique({ where: { email } });
     if (!user || !user.active) {

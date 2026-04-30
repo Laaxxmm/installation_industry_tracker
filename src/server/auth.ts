@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "./db";
 import type { Role } from "@prisma/client";
 import authConfig from "./auth.config";
+import { rateLimit } from "@/lib/rate-limit";
 
 declare module "next-auth" {
   interface Session {
@@ -47,6 +48,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(raw) {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
+
+        // Rate-limit per email: 5 attempts per minute. Stops credential
+        // brute-force without making the legitimate user's bad-typo retry
+        // loop feel sluggish. Returning `null` here surfaces as "Invalid
+        // credentials" which is what we want — don't disclose the limit.
+        const limit = rateLimit(
+          `web-login:email:${parsed.data.email.toLowerCase()}`,
+          5,
+          60_000,
+        );
+        if (!limit.allowed) return null;
 
         const user = await db.user.findUnique({
           where: { email: parsed.data.email },

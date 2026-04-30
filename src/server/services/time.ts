@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma, TimeEntryStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { minutesBetween } from "@/lib/time";
+import { detectImageKind, extForImageKind } from "@/lib/file-magic";
 
 export const MAX_PHOTOS = 10;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10 MB per photo
@@ -49,14 +50,27 @@ export async function savePunchPhotos(entryId: string, files: File[]): Promise<s
     if (file.size > MAX_PHOTO_BYTES) {
       throw new Error(`"${file.name}" exceeds the 10 MB limit.`);
     }
+    // First-pass MIME check on the client-supplied header — fast reject
+    // for obviously-wrong files. The authoritative check is the magic-byte
+    // sniff after we've read the bytes.
     const mime = (file.type || "").toLowerCase();
     if (mime && !ALLOWED_IMAGE_MIME.has(mime)) {
       throw new Error(`"${file.name}" is not a supported image type.`);
     }
-    const rawExt = file.name.includes(".") ? file.name.split(".").pop() : "";
-    const ext = (rawExt || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "jpg";
-    const fname = `${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Authoritative format check from the file's actual bytes. Stops a
+    // crafted PDF / executable / HTML payload smuggled past with a fake
+    // image/jpeg Content-Type. The extension is also derived from the
+    // sniffed kind, so the saved file always matches its real format.
+    const kind = detectImageKind(buffer);
+    if (!kind) {
+      throw new Error(
+        `"${file.name}" is not a recognized image (must be JPEG, PNG, GIF, WebP, or HEIC).`,
+      );
+    }
+
+    const fname = `${Date.now()}-${randomUUID().slice(0, 8)}.${extForImageKind(kind)}`;
     await writeFile(join(uploadDir, fname), buffer);
     urls.push(`/uploads/punch/${entryId}/${fname}`);
   }
