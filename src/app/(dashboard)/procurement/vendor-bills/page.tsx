@@ -40,6 +40,7 @@ export default async function VendorBillsPage({
             { billNo: { contains: q, mode: "insensitive" as const } },
             { vendorBillNo: { contains: q, mode: "insensitive" as const } },
             { vendor: { name: { contains: q, mode: "insensitive" as const } } },
+            { po: { poNo: { contains: q, mode: "insensitive" as const } } },
           ],
         }
       : {}),

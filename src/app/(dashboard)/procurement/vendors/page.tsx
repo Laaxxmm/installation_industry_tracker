@@ -43,14 +43,16 @@ export default async function VendorsPage({
   const category = sp.category?.trim() ?? "";
 
   // Filter clauses translated into Prisma where filters. Search matches
-  // against vendor name OR code (case-insensitive); category narrows by
-  // enum.
+  // against name / code / GSTIN / contact (case-insensitive); category
+  // narrows by enum.
   const where = {
     ...(q
       ? {
           OR: [
             { name: { contains: q, mode: "insensitive" as const } },
             { code: { contains: q, mode: "insensitive" as const } },
+            { gstin: { contains: q, mode: "insensitive" as const } },
+            { contactName: { contains: q, mode: "insensitive" as const } },
           ],
         }
       : {}),

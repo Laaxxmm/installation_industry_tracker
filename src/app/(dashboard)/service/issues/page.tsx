@@ -82,6 +82,7 @@ export default async function ServiceIssuesPage({
                 { ticketNo: { contains: q, mode: "insensitive" as const } },
                 { summary: { contains: q, mode: "insensitive" as const } },
                 { client: { name: { contains: q, mode: "insensitive" as const } } },
+                { assignedTo: { name: { contains: q, mode: "insensitive" as const } } },
               ],
             }
           : {}),
