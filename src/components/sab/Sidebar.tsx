@@ -26,6 +26,7 @@ const NAV: NavNode[] = [
   { kind: "sep", label: "Operations" },
   { kind: "item", key: "timesheets", label: "Timesheets", icon: "clock", href: "/timesheets" },
   { kind: "item", key: "inventory", label: "Inventory", icon: "box", href: "/inventory" },
+  { kind: "item", key: "indents", label: "Material indents", icon: "report", href: "/indents" },
   { kind: "item", key: "overhead", label: "Overhead", icon: "briefcase", href: "/overhead" },
   { kind: "item", key: "reports", label: "Reports", icon: "report", href: "/reports" },
 
