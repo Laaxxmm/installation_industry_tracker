@@ -10,6 +10,29 @@ import { AlertCircle } from "lucide-react";
 // borders with an orange focus ring; the submit button is the signal orange
 // used for punch + submit-for-approval elsewhere.
 
+/**
+ * Open-redirect guard: only let `callbackUrl` through if it's a same-origin
+ * relative path. NextAuth validates this on its side, but we also call
+ * `router.push(callbackUrl)` directly — without this check, a link like
+ * `/login?callbackUrl=https://evil.com` would land an authenticated user on
+ * a phishing site post-login.
+ */
+function safeCallback(raw: string | undefined): string {
+  if (!raw) return "/";
+  // Must start with a single "/", and must NOT be protocol-relative ("//"),
+  // a full URL ("http(s)://"), or contain a backslash (some clients
+  // normalize \\ → //). Reject everything else.
+  if (
+    !raw.startsWith("/") ||
+    raw.startsWith("//") ||
+    raw.includes("\\") ||
+    /^[a-z][a-z0-9+.-]*:/i.test(raw)
+  ) {
+    return "/";
+  }
+  return raw;
+}
+
 export function LoginForm({
   callbackUrl,
   error,
@@ -26,19 +49,20 @@ export function LoginForm({
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLocalError(null);
+    const safe = safeCallback(callbackUrl);
     startTransition(async () => {
       const res = await signIn("credentials", {
         email,
         password,
         redirect: false,
-        callbackUrl: callbackUrl ?? "/",
+        callbackUrl: safe,
       });
       if (!res || res.error) {
         setLocalError("Invalid email or password");
         toast.error("Invalid email or password");
         return;
       }
-      router.push(callbackUrl ?? "/");
+      router.push(safe);
       router.refresh();
     });
   }

@@ -35,6 +35,14 @@ function getFyForDate(d: Date): { storageYear: number; label: string } {
 }
 
 async function nextIndentNumber(tx: Prisma.TransactionClient): Promise<string> {
+  // Concurrency: two PMs hitting createIndent at the same time both end up
+  // calling this inside their own `db.$transaction`. Postgres' default
+  // isolation (read-committed) plus Prisma's transaction wrapping means the
+  // {find → update with `increment: 1`} pair is serialized at the row level
+  // — the second tx blocks until the first commits, then sees the new
+  // `next` value. So `claimed` numbers are unique without an advisory lock.
+  // Trade-off: under heavy concurrent load, the second tx waits for the
+  // first; for this workload (a few indents/day per PM) that's fine.
   const fy = getFyForDate(new Date());
   const existing = await tx.indentNumberSequence.findUnique({
     where: { year: fy.storageYear },

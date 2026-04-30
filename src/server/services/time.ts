@@ -21,9 +21,12 @@ const ALLOWED_IMAGE_MIME = new Set([
 ]);
 
 // Clients may send a clock timestamp when replaying an offline op. We trust
-// it only if it's within this window — stops a rogue client backdating by
-// months, but covers anyone who was offline for a normal shift.
-const CLIENT_CLOCK_TRUST_MS = 24 * 60 * 60 * 1000;
+// it only if it's within this window. The previous 24h cap was wide enough
+// for anti-fraud concerns (an employee could backdate a punch to claim a
+// missed shift). 5 minutes is enough for normal client-clock skew + brief
+// offline replays; anything older falls back to server `now()` so a
+// supervisor has to make the correction explicitly.
+const CLIENT_CLOCK_TRUST_MS = 5 * 60 * 1000;
 
 export function resolveClientClock(iso: string | null | undefined): Date {
   if (!iso) return new Date();
