@@ -40,22 +40,25 @@ export default async function GRNsPage({
     ...(status ? { status: status as GRNStatus } : {}),
   };
 
-  const grns = await db.gRN.findMany({
-    where,
-    orderBy: { receivedAt: "desc" },
-    take: 200,
-    include: {
-      po: {
-        select: {
-          id: true,
-          poNo: true,
-          vendor: { select: { name: true, code: true } },
+  const [grns, totalCount] = await Promise.all([
+    db.gRN.findMany({
+      where,
+      orderBy: { receivedAt: "desc" },
+      take: 200,
+      include: {
+        po: {
+          select: {
+            id: true,
+            poNo: true,
+            vendor: { select: { name: true, code: true } },
+          },
         },
+        receivedBy: { select: { name: true, email: true } },
+        _count: { select: { lines: true } },
       },
-      receivedBy: { select: { name: true, email: true } },
-      _count: { select: { lines: true } },
-    },
-  });
+    }),
+    db.gRN.count(),
+  ]);
 
   const accepted = grns.filter((g) => g.status === "ACCEPTED").length;
   const partial = grns.filter((g) => g.status === "PARTIALLY_ACCEPTED").length;
@@ -97,7 +100,7 @@ export default async function GRNsPage({
         />
         {(q || status) && (
           <span className="text-[11px] text-slate-500">
-            {grns.length} GRN{grns.length === 1 ? "" : "s"} match
+            {grns.length} of {totalCount} GRN{totalCount === 1 ? "" : "s"}
           </span>
         )}
       </div>
@@ -179,6 +182,11 @@ export default async function GRNsPage({
             ))}
           </tbody>
         </table>
+        {grns.length >= 200 && totalCount > grns.length && (
+          <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
+            Showing 200 of {totalCount} GRNs. Refine search to see more.
+          </div>
+        )}
       </div>
     </div>
   );

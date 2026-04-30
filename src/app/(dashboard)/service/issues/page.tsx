@@ -73,27 +73,30 @@ export default async function ServiceIssuesPage({
   const status = sp.status?.trim() ?? "";
   const priority = sp.priority?.trim() ?? "";
 
-  const issues = await db.serviceIssue.findMany({
-    where: {
-      ...(q
-        ? {
-            OR: [
-              { ticketNo: { contains: q, mode: "insensitive" as const } },
-              { summary: { contains: q, mode: "insensitive" as const } },
-              { client: { name: { contains: q, mode: "insensitive" as const } } },
-            ],
-          }
-        : {}),
-      ...(status ? { status: status as ServiceStatus } : {}),
-      ...(priority ? { priority: priority as ServicePriority } : {}),
-    },
-    orderBy: [{ status: "asc" }, { reportedAt: "desc" }],
-    take: 300,
-    include: {
-      client: { select: { name: true } },
-      assignedTo: { select: { name: true } },
-    },
-  });
+  const [issues, totalCount] = await Promise.all([
+    db.serviceIssue.findMany({
+      where: {
+        ...(q
+          ? {
+              OR: [
+                { ticketNo: { contains: q, mode: "insensitive" as const } },
+                { summary: { contains: q, mode: "insensitive" as const } },
+                { client: { name: { contains: q, mode: "insensitive" as const } } },
+              ],
+            }
+          : {}),
+        ...(status ? { status: status as ServiceStatus } : {}),
+        ...(priority ? { priority: priority as ServicePriority } : {}),
+      },
+      orderBy: [{ status: "asc" }, { reportedAt: "desc" }],
+      take: 300,
+      include: {
+        client: { select: { name: true } },
+        assignedTo: { select: { name: true } },
+      },
+    }),
+    db.serviceIssue.count(),
+  ]);
 
   return (
     <div>
@@ -138,7 +141,7 @@ export default async function ServiceIssuesPage({
         />
         {(q || status || priority) && (
           <span className="text-[11px] text-slate-500">
-            {issues.length} ticket{issues.length === 1 ? "" : "s"} match
+            {issues.length} of {totalCount} ticket{totalCount === 1 ? "" : "s"}
           </span>
         )}
       </div>
@@ -210,6 +213,11 @@ export default async function ServiceIssuesPage({
             ))}
           </tbody>
         </table>
+        {issues.length >= 300 && totalCount > issues.length && (
+          <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
+            Showing 300 of {totalCount} tickets. Refine search to see more.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -48,16 +48,19 @@ export default async function PurchaseOrdersPage({
     ...(status ? { status: status as VendorPOStatus } : {}),
   };
 
-  const pos = await db.vendorPO.findMany({
-    where,
-    orderBy: { issueDate: "desc" },
-    take: 200,
-    include: {
-      vendor: { select: { code: true, name: true, msme: true } },
-      project: { select: { code: true, name: true } },
-      _count: { select: { lines: true, grns: true } },
-    },
-  });
+  const [pos, totalCount] = await Promise.all([
+    db.vendorPO.findMany({
+      where,
+      orderBy: { issueDate: "desc" },
+      take: 200,
+      include: {
+        vendor: { select: { code: true, name: true, msme: true } },
+        project: { select: { code: true, name: true } },
+        _count: { select: { lines: true, grns: true } },
+      },
+    }),
+    db.vendorPO.count(),
+  ]);
 
   const open = pos.filter((p) =>
     ["APPROVED", "SENT", "PARTIALLY_RECEIVED"].includes(p.status),
@@ -119,7 +122,7 @@ export default async function PurchaseOrdersPage({
         />
         {(q || status) && (
           <span className="text-[11px] text-slate-500">
-            {pos.length} PO{pos.length === 1 ? "" : "s"} match
+            {pos.length} of {totalCount} PO{totalCount === 1 ? "" : "s"}
           </span>
         )}
       </div>
@@ -226,6 +229,11 @@ export default async function PurchaseOrdersPage({
             ))}
           </tbody>
         </table>
+        {pos.length >= 200 && totalCount > pos.length && (
+          <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
+            Showing 200 of {totalCount} purchase orders. Refine search to see more.
+          </div>
+        )}
       </div>
     </div>
   );

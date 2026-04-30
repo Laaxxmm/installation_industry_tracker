@@ -46,15 +46,18 @@ export default async function VendorBillsPage({
     ...(status ? { status: status as VendorBillStatus } : {}),
   };
 
-  const bills = await db.vendorBill.findMany({
-    where,
-    orderBy: { issueDate: "desc" },
-    take: 200,
-    include: {
-      vendor: { select: { id: true, code: true, name: true, msme: true } },
-      po: { select: { poNo: true } },
-    },
-  });
+  const [bills, totalCount] = await Promise.all([
+    db.vendorBill.findMany({
+      where,
+      orderBy: { issueDate: "desc" },
+      take: 200,
+      include: {
+        vendor: { select: { id: true, code: true, name: true, msme: true } },
+        po: { select: { poNo: true } },
+      },
+    }),
+    db.vendorBill.count(),
+  ]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -112,7 +115,7 @@ export default async function VendorBillsPage({
         />
         {(q || status) && (
           <span className="text-[11px] text-slate-500">
-            {bills.length} bill{bills.length === 1 ? "" : "s"} matching
+            {bills.length} of {totalCount} bill{totalCount === 1 ? "" : "s"}
           </span>
         )}
       </div>
@@ -234,6 +237,11 @@ export default async function VendorBillsPage({
             })}
           </tbody>
         </table>
+        {bills.length >= 200 && totalCount > bills.length && (
+          <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
+            Showing 200 of {totalCount} bills. Refine search to see more.
+          </div>
+        )}
       </div>
     </div>
   );

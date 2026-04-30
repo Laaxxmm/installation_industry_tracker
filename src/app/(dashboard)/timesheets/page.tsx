@@ -18,6 +18,10 @@ export default async function TimesheetsApprovalPage({
 }: {
   searchParams: Promise<{ status?: string; q?: string }>;
 }) {
+  // EMPLOYEE is intentionally excluded from this list. Employees clock
+  // their own time via /punch (the mobile-friendly clock-in flow);
+  // /timesheets is a manager review tool for approving submitted entries
+  // and shouldn't expose other employees' hours to peers.
   const session = await requireRole([
     Role.ADMIN,
     Role.MANAGER,
@@ -55,29 +59,30 @@ export default async function TimesheetsApprovalPage({
       }
     : {};
 
-  const entries = await db.timeEntry.findMany({
-    where:
-      session.user.role === Role.SUPERVISOR
-        ? {
-            ...statusWhere,
-            ...searchWhere,
-            project: { siteSupervisorId: session.user.id },
-          }
-        : { ...statusWhere, ...searchWhere },
-    orderBy: { clockIn: "desc" },
-    take: 200,
-    select: {
-      id: true,
-      clockIn: true,
-      clockOut: true,
-      minutes: true,
-      status: true,
-      note: true,
-      photoUrls: true,
-      employee: { select: { name: true } },
-      project: { select: { code: true, name: true } },
-    },
-  });
+  const supervisorScope =
+    session.user.role === Role.SUPERVISOR
+      ? { project: { siteSupervisorId: session.user.id } }
+      : {};
+
+  const [entries, totalCount] = await Promise.all([
+    db.timeEntry.findMany({
+      where: { ...statusWhere, ...searchWhere, ...supervisorScope },
+      orderBy: { clockIn: "desc" },
+      take: 200,
+      select: {
+        id: true,
+        clockIn: true,
+        clockOut: true,
+        minutes: true,
+        status: true,
+        note: true,
+        photoUrls: true,
+        employee: { select: { name: true } },
+        project: { select: { code: true, name: true } },
+      },
+    }),
+    db.timeEntry.count({ where: supervisorScope }),
+  ]);
 
   const totalMinutes = entries.reduce((s, e) => s + (e.minutes ?? 0), 0);
   const hh = Math.floor(totalMinutes / 60);
@@ -130,7 +135,7 @@ export default async function TimesheetsApprovalPage({
         />
         {q && (
           <span className="text-[11px] text-slate-500">
-            {entries.length} entr{entries.length === 1 ? "y" : "ies"} match
+            {entries.length} of {totalCount} entr{totalCount === 1 ? "y" : "ies"}
           </span>
         )}
       </div>
@@ -147,6 +152,11 @@ export default async function TimesheetsApprovalPage({
           </div>
         </div>
         <TimesheetsTable entries={rows} canDelete={canDelete} />
+        {entries.length >= 200 && totalCount > entries.length && (
+          <div className="mt-2 text-center text-[11px] text-slate-500">
+            Showing 200 of {totalCount} entries. Refine search to see more.
+          </div>
+        )}
       </div>
     </div>
   );

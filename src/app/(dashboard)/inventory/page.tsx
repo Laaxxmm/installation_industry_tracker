@@ -145,7 +145,7 @@ export default async function InventoryPage({
         />
         {(q || status) && (
           <span className="text-[11px] text-slate-500">
-            {materials.length} SKU{materials.length === 1 ? "" : "s"} match
+            {materials.length} of {totalCount} SKU{totalCount === 1 ? "" : "s"}
           </span>
         )}
       </div>

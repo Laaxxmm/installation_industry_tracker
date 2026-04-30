@@ -137,7 +137,7 @@ export default async function QuotesPage({
         />
         {(q || status) && (
           <span className="text-[11px] text-slate-500">
-            {quotes.length} quote{quotes.length === 1 ? "" : "s"} match
+            {quotes.length} of {totalQuoteCount} quote{totalQuoteCount === 1 ? "" : "s"}
           </span>
         )}
       </div>

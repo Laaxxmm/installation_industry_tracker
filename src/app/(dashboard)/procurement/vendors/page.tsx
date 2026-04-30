@@ -231,6 +231,11 @@ export default async function VendorsPage({
             ))}
           </tbody>
         </table>
+        {vendors.length >= 300 && totalCount > vendors.length && (
+          <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
+            Showing 300 of {totalCount} vendors. Refine search to see more.
+          </div>
+        )}
       </div>
     </div>
   );

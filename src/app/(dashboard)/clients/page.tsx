@@ -158,7 +158,7 @@ export default async function ClientsPage({
         </table>
         {clients.length >= 200 && totalCount > clients.length && (
           <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
-            Showing 200 of {totalCount} clients.
+            Showing 200 of {totalCount} clients. Refine search to see more.
           </div>
         )}
       </div>

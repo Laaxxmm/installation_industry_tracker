@@ -70,7 +70,7 @@ export default async function AMCListPage({
 
   const fyStart = new Date(now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1, 3, 1);
 
-  const [amcs, activeCount, expiringCount, visitsThisWeek, bookedYTD] = await Promise.all([
+  const [amcs, totalCount, activeCount, expiringCount, visitsThisWeek, bookedYTD] = await Promise.all([
     db.aMC.findMany({
       where: amcWhere,
       orderBy: [{ status: "asc" }, { endDate: "asc" }],
@@ -80,6 +80,7 @@ export default async function AMCListPage({
         _count: { select: { visits: true } },
       },
     }),
+    db.aMC.count(),
     db.aMC.count({ where: { status: AMCStatus.ACTIVE } }),
     db.aMC.count({
       where: { status: AMCStatus.ACTIVE, endDate: { gte: now, lte: in30Days } },
@@ -141,7 +142,7 @@ export default async function AMCListPage({
         />
         {(q || status) && (
           <span className="text-[11px] text-slate-500">
-            {amcs.length} contract{amcs.length === 1 ? "" : "s"} match
+            {amcs.length} of {totalCount} contract{totalCount === 1 ? "" : "s"}
           </span>
         )}
       </div>
@@ -226,6 +227,11 @@ export default async function AMCListPage({
             ))}
           </tbody>
         </table>
+        {amcs.length >= 300 && totalCount > amcs.length && (
+          <div className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[11px] text-slate-500">
+            Showing 300 of {totalCount} contracts. Refine search to see more.
+          </div>
+        )}
       </div>
     </div>
   );

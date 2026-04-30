@@ -148,7 +148,7 @@ export default async function ProjectsPage({
         />
         {(q || status) && (
           <span className="text-[11px] text-slate-500">
-            {rows.length} project{rows.length === 1 ? "" : "s"} match
+            {rows.length} of {totalCount} project{totalCount === 1 ? "" : "s"}
           </span>
         )}
       </div>

@@ -255,7 +255,7 @@ export default async function InvoicesIndexPage({
         />
         {(q || status) && (
           <span className="text-[11px] text-slate-500">
-            {rows.length} invoice{rows.length === 1 ? "" : "s"} match
+            {rows.length} of {totalInvoiceCount} invoice{totalInvoiceCount === 1 ? "" : "s"}
           </span>
         )}
       </div>
