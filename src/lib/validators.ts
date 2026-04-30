@@ -502,3 +502,26 @@ export const ServiceIssueCloseInput = z.object({
   billableAmount: decimalString.optional(),
 });
 export type ServiceIssueCloseInput = z.infer<typeof ServiceIssueCloseInput>;
+
+// ---------- Material indents ----------
+
+export const MaterialIndentLineInput = z.object({
+  materialId: z.string().min(1),
+  requestedQty: decimalString,
+  notes: z.string().max(500).nullable().optional(),
+});
+export type MaterialIndentLineInput = z.infer<typeof MaterialIndentLineInput>;
+
+export const MaterialIndentInput = z.object({
+  projectId: z.string().min(1),
+  notes: z.string().max(2000).nullable().optional(),
+  lines: z.array(MaterialIndentLineInput).min(1, "At least one line item required"),
+});
+export type MaterialIndentInput = z.infer<typeof MaterialIndentInput>;
+
+export const IssueIndentLineInput = z.object({
+  qtyToIssue: decimalString,
+  note: z.string().max(500).nullable().optional(),
+  issuedAt: z.string().datetime().optional(),
+});
+export type IssueIndentLineInput = z.infer<typeof IssueIndentLineInput>;

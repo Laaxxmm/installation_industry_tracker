@@ -145,6 +145,8 @@ model User {
   serviceIssuesClosed   ServiceIssue[]    @relation("ServiceIssueClosedBy")
   serviceIssuesTriaged  ServiceIssue[]    @relation("ServiceIssueTriagedBy")
   serviceVisitsAssigned ServiceVisit[]    @relation("ServiceVisitAssignee")
+  indentsRequested      MaterialIndent[]  @relation("IndentRequester")
+  indentsApproved       MaterialIndent[]  @relation("IndentApprover")
 }
 
 model EmployeeRateCard {
@@ -236,6 +238,7 @@ model Project {
   vendorPos       VendorPO[]
   amcs            AMC[]
   serviceIssues   ServiceIssue[]
+  indents         MaterialIndent[]
 
   @@index([status])
   @@index([siteSupervisorId])
@@ -248,6 +251,12 @@ model BudgetLine {
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   category    BudgetCategory
   description String
+  // Optional binding to a specific Material SKU. When set, the indent
+  // budget-check matches against this line by materialId. Legacy free-text
+  // budget lines (materialId = null) don't grant in-budget allowance and
+  // their indents fall through to ADMIN approval.
+  materialId  String?
+  material    Material?      @relation(fields: [materialId], references: [id])
   quantity    Decimal        @db.Decimal(12, 3)
   unitCost    Decimal        @db.Decimal(12, 2)
   total       Decimal        @db.Decimal(14, 2)
@@ -255,6 +264,7 @@ model BudgetLine {
   updatedAt   DateTime       @updatedAt
 
   @@index([projectId, category])
+  @@index([projectId, materialId])
 }
 
 // ---------- Time & labor ----------
@@ -351,9 +361,11 @@ model Material {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  receipts  StockReceipt[]
-  issues    StockIssue[]
-  transfers MaterialTransfer[]
+  receipts     StockReceipt[]
+  issues       StockIssue[]
+  transfers    MaterialTransfer[]
+  indentLines  MaterialIndentLine[]
+  budgetLines  BudgetLine[]
 }
 
 model StockReceipt {
@@ -386,10 +398,16 @@ model StockIssue {
   amcVisit        AMCVisit?     @relation(fields: [amcVisitId], references: [id])
   serviceVisitId  String?  @unique
   serviceVisit    ServiceVisit? @relation(fields: [serviceVisitId], references: [id])
+  // Backref when this issue was created to fulfill an indent line. Lets us
+  // trace any StockIssue back to the request it satisfied; nullable so
+  // direct issues (issued-without-indent) keep working.
+  indentLineId    String?
+  indentLine      MaterialIndentLine? @relation(fields: [indentLineId], references: [id])
   createdAt       DateTime @default(now())
 
   @@index([projectId, issuedAt])
   @@index([materialId, issuedAt])
+  @@index([indentLineId])
 }
 
 model DirectPurchase {
@@ -457,6 +475,72 @@ model MaterialTransfer {
   @@index([fromProjectId, transferredAt])
   @@index([toProjectId, transferredAt])
   @@index([materialId, transferredAt])
+}
+
+// ---------- Material indents (PM → Storekeeper request flow) ----------
+// PM raises an indent against a project; budget check at submit time decides
+// whether storekeeper can issue directly (in budget) or whether ADMIN needs
+// to approve (over budget). Lines support partial issuance — a line stays
+// open until issuedQty reaches requestedQty.
+
+enum MaterialIndentStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PARTIALLY_ISSUED
+  ISSUED
+  CANCELLED
+}
+
+model MaterialIndent {
+  id              String               @id @default(cuid())
+  indentNo        String               @unique // e.g. "IND-26-27-0001"
+  projectId       String
+  project         Project              @relation(fields: [projectId], references: [id])
+  requestedById   String
+  requestedBy     User                 @relation("IndentRequester", fields: [requestedById], references: [id])
+  status          MaterialIndentStatus @default(DRAFT)
+  needsApproval   Boolean              @default(false) // computed at submit
+  approvedById    String?
+  approvedBy      User?                @relation("IndentApprover", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  rejectionReason String?
+  notes           String?
+  submittedAt     DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  lines MaterialIndentLine[]
+
+  @@index([status])
+  @@index([projectId, status])
+  @@index([requestedById])
+}
+
+model MaterialIndentLine {
+  id                String   @id @default(cuid())
+  indentId          String
+  indent            MaterialIndent @relation(fields: [indentId], references: [id], onDelete: Cascade)
+  materialId        String
+  material          Material @relation(fields: [materialId], references: [id])
+  requestedQty      Decimal  @db.Decimal(14, 3)
+  unitCostSnapshot  Decimal  @db.Decimal(12, 4)
+  isInBudget        Boolean  @default(true)
+  reasonOutOfBudget String?
+  issuedQty         Decimal  @default(0) @db.Decimal(14, 3)
+  notes             String?
+
+  stockIssues StockIssue[]
+
+  @@index([indentId])
+  @@index([materialId])
+}
+
+model IndentNumberSequence {
+  year Int @id
+  next Int @default(1)
 }
 
 // ---------- Sales pipeline (new) ----------
